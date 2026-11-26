@@ -1,0 +1,10 @@
+// Copy this file to Config/Local.xcconfig and fill in the values. Local.xcconfig is never committed.
+//
+// PRODUCT_BUNDLE_IDENTIFIER: any name nobody else uses, e.g. com.yourname.cineid
+// DEVELOPMENT_TEAM: your 10-character team ID (Xcode > Settings > Accounts > your Personal Team).
+//   Signing with the same team every build keeps your Screen Recording / Automation permissions across rebuilds.
+// CINEID_REPO_ROOT: absolute path of the cineid repo (the folder containing venv/ and src/). Optional:
+//   the default is the parent of mac/.
+PRODUCT_BUNDLE_IDENTIFIER = com.yourname.cineid
+DEVELOPMENT_TEAM = ABCDE12345
+CINEID_REPO_ROOT = /absolute/path/to/cineid

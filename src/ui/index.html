@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goldfish Brain</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23e5484d'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top" id="top">
+  <div class="brand"><span class="logo" aria-hidden="true">●</span> Goldfish Brain</div>
+  <nav id="nav" aria-label="Main">
+    <a href="#/library" data-route="library">Library</a>
+    <a href="#/add" data-route="add">Add a show</a>
+    <a href="#/settings" data-route="settings">Settings</a>
+  </nav>
+</header>
+<main id="app" aria-live="polite"></main>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

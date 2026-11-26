@@ -1,0 +1,7 @@
+// Shared build settings. Your own values go in Config/Local.xcconfig (not committed): see Local.xcconfig.example.
+PRODUCT_BUNDLE_IDENTIFIER = com.example.cineid
+DEVELOPMENT_TEAM =
+// Folder that holds venv/ and src/server.py (the Python engine). Defaults to the repo this project lives in.
+CINEID_REPO_ROOT = $(SRCROOT)/..
+
+#include? "Local.xcconfig"

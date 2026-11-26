@@ -1,0 +1,59 @@
+# secrets
+.env
+
+# virtualenvs (source/ is an old abandoned venv)
+venv/
+source/
+
+# ML models (~1GB, downloaded on first run)
+models/
+
+# generated per-show data: TMDB photos + FAISS indexes (re-create via setup_show.py)
+data/shows/
+data/last_capture.jpg
+data/*.db-shm
+data/*.db-wal
+
+# knowledge graph (regenerate with `graphify update .`)
+graphify-out/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# local claude settings
+.claude/settings.local.json
+
+# your personal database and viewing position (created on first run)
+data/cineid.db
+data/config.json
+data/*.db-journal
+
+# brainstorm mockups
+.superpowers/
+
+# native Mac app (mac/): generated project, build output, owner's signing config
+mac/Config/Local.xcconfig
+mac/*.xcodeproj
+mac/DerivedData/
+mac/DerivedData-install/
+
+# local accuracy feedback (screenshots + reports)
+data/feedback/
+
+# test/diagnostic output
+.playwright-mcp/
+data/feedback/
+mac/build/
+.build/
+*.log
+
+# third-party plugin copies (not part of this project)
+skills/
+CineID.app/
+assets/mascot-original.jpg
+ONBOARDING.md

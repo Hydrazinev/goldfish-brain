@@ -1,0 +1,56 @@
+name: CineID
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    macOS: "14.0"
+configFiles:
+  Debug: Config/CineID.xcconfig
+  Release: Config/CineID.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    ENABLE_APP_SANDBOX: NO
+    ENABLE_HARDENED_RUNTIME: NO
+targets:
+  CineID:
+    type: application
+    platform: macOS
+    sources: [CineID]
+    settings:
+      base:
+        PRODUCT_NAME: Goldfish Brain
+        PRODUCT_MODULE_NAME: CineID
+    info:
+      path: CineID/Info.plist
+      properties:
+        CFBundleName: Goldfish Brain
+        CFBundleDisplayName: Goldfish Brain
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: false
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSAppleEventsUsageDescription: Goldfish Brain asks Chrome which Netflix episode is playing so it can show the right characters.
+        CineIDRepoRoot: $(CINEID_REPO_ROOT)
+  CineIDTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [CineIDTests]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(inherited).tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Goldfish Brain.app/Contents/MacOS/Goldfish Brain"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+    dependencies:
+      - target: CineID
+schemes:
+  CineID:
+    build:
+      targets:
+        CineID: all
+    test:
+      targets: [CineIDTests]
