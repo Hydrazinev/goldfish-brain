@@ -81,3 +81,5 @@ Replay uses the same assignment/margin policy as Identify and the captured spoil
 `venv/bin/pytest tests/ -q` exercises capture isolation, exact bytes, quota, deletion boundaries, UUID/origin checks, append-only revisions, prediction exposure, replay policy, geometric scoring and frozen partitions.
 
 `tests/browser/evaluation.cjs` drives the real Settings and Evaluate UI against an isolated temporary API/database fixture. Install Playwright in a separate tooling environment, set `PLAYWRIGHT_MODULE` if needed, and optionally set `CINEID_BROWSER_EXECUTABLE`. **Close regular Chrome first.** The script refuses to launch if it is running, uses a separate temporary browser profile, and closes the browser and fixture server in `finally`.
+
+> **Box matching:** hand-drawn boxes are rarely as tight as the detector's. A prediction matches a label if IoU ≥ 0.5, or if it lies at least 80% inside the label and is at least 15% of its area (`eval_metrics.overlap`).

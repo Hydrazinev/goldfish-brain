@@ -127,3 +127,16 @@ def test_possible_tier_can_be_switched_off(monkeypatch):
 def test_confident_match_is_not_marked_possible(monkeypatch):
     out = _identify(monkeypatch, [("s-a", 0.7)])
     assert not out["characters"][0].get("possible")
+
+
+def test_loose_hand_drawn_box_still_matches_the_tight_detector_box():
+    import eval_metrics
+    label = [351, 240, 733, 601]          # a whole head, drawn by hand
+    pred = [443, 271, 646, 542]           # the detector's tight face box
+    assert eval_metrics.iou(pred, label) < 0.5
+    assert eval_metrics.match_boxes([{"bbox": pred}], [{"bbox": label}]) == {0: 0}
+
+
+def test_tiny_fragment_inside_a_big_label_does_not_match():
+    import eval_metrics
+    assert eval_metrics.match_boxes([{"bbox": [10, 10, 20, 20]}], [{"bbox": [0, 0, 400, 400]}]) == {}

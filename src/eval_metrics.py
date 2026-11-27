@@ -22,9 +22,23 @@ def iou(a, b):
     return inter / area if area > 0 else 0
 
 
+def overlap(pred, label):
+    """Localisation score. Hand-drawn labels are usually looser than the detector's tight face box (a whole head
+    vs forehead-to-chin), which IoU alone punishes unfairly. Accept either a good IoU, or a prediction that lies
+    (mostly) inside the label and is not a tiny fragment of it."""
+    score = iou(pred, label)
+    left, top, right, bottom = max(pred[0], label[0]), max(pred[1], label[1]), min(pred[2], label[2]), min(pred[3], label[3])
+    inter = max(0, right-left) * max(0, bottom-top)
+    pred_area = max(1e-9, (pred[2]-pred[0])*(pred[3]-pred[1]))
+    label_area = max(1e-9, (label[2]-label[0])*(label[3]-label[1]))
+    if inter / pred_area >= 0.8 and pred_area / label_area >= 0.15:
+        score = max(score, 0.5 + 0.5 * min(1.0, pred_area / label_area))   # contained face: rank by closeness in size
+    return score
+
+
 def match_boxes(predicted, labelled, threshold=0.5):
     if not predicted or not labelled: return {}
-    overlaps = np.array([[iou(p['bbox'], t['bbox']) for t in labelled] for p in predicted])
+    overlaps = np.array([[overlap(p['bbox'], t['bbox']) for t in labelled] for p in predicted])
     # Maximum cardinality first, then overlap. Identity never influences localisation matching.
     benefit = np.where(overlaps >= threshold, 1000 + overlaps, 0)
     pi, ti = linear_sum_assignment(-benefit)
