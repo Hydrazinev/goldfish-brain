@@ -58,6 +58,7 @@ def rebuild(show_dir: Path, recogniser, index_cls, apply: bool, copies: int = ga
         if src.exists():
             shutil.copy2(src, src.with_name(src.name + ".bak"))
     new.save(index_path)
+    (index_path.parent / "gallery_aug.flag").write_text("1")   # calibration was fitted on the clean gallery
     summary["applied"] = True
     out(f"\nWrote {index_path} (backup: {index_path.name}.bak). Restart the app to load it.")
     return summary

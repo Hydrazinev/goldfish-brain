@@ -175,3 +175,24 @@ def test_saving_the_redacted_view_does_not_delete_hidden_text():
     full = e.client.get("/api/characters/s-a/notes?all=1").json()
     assert "Mike Ehrmantraut" in full["relationship_summary"]
     assert "Mike Ehrmantraut" in full["entries"][0]["current_arc"]
+
+
+def test_editor_save_handler_has_spoiler_mode_in_scope():
+    """Regression: noteForm used `spoilers` without receiving it (ReferenceError, Save never sent)."""
+    js = (Path(__file__).parent.parent / "src" / "ui" / "app.js").read_text()
+    assert "function noteForm(c, data, hooks, spoilers)" in js
+    assert "noteForm(c, r.data, hooks, spoilers)" in js
+
+
+def test_edited_bio_keeps_clause_separation_so_it_is_not_swallowed():
+    import ask
+    e = setup()
+    e.db.add_character("s-b", "s", "Ben Davis", actor_name="X", first_season=3, first_episode=1)
+    e.db.add_character("s-a", "s", "Saul", actor_name="Bob Odenkirk", actor_tmdb_id=5,
+                       relationship_summary="Detective; partner of Ben Davis", first_season=1, first_episode=1)
+    r = put(e, {"relationship_summary": "Detective", "entries": []})
+    assert r.status_code == 200
+    bio = e.client.get("/api/characters/s-a/notes?all=1").json()["relationship_summary"]
+    assert bio == "Detective; partner of Ben Davis"
+    shown = e.client.get("/api/characters/s-a/notes").json()["relationship_summary"]
+    assert shown == "Detective", "the visible edit must not disappear with the hidden clause"

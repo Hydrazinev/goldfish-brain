@@ -312,12 +312,12 @@ function noteEditor(spoilers, c, hooks) {
   root.append(h("p", { class: "muted small", text: "Loading…" }));
   api("/characters/" + encodeURIComponent(c.character_id) + "/notes" + (spoilers ? "?all=1" : "")).then(r => {
     if (!r.ok) { root.replaceChildren(h("p", { class: "msg bad", text: r.data.message }), h("button", { type: "button", text: "Close", onclick: hooks.close })); return; }
-    root.replaceChildren(...noteForm(c, r.data, hooks));
+    root.replaceChildren(...noteForm(c, r.data, hooks, spoilers));
   });
   return root;
 }
 
-function noteForm(c, data, hooks) {
+function noteForm(c, data, hooks, spoilers) {
   const uid = "n" + Math.random().toString(36).slice(2, 8);
   const bio = h("textarea", { id: uid + "-bio", rows: 4, maxlength: 600, placeholder: "Who they are to the others, one per line" });
   bio.value = (data.relationship_summary || "").split(/;\s*|\n/).map(x => x.trim()).filter(Boolean).join("\n");

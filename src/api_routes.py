@@ -424,14 +424,17 @@ def build_router(deps: ApiDeps) -> APIRouter:
             (visible if _is_met(db, c, season, episode) else hidden).append(c["character_name"])
         return hidden, visible
 
-    def _keep_hidden(stored: str, submitted: str, redact) -> str:
+    def _keep_hidden(stored: str, submitted: str, redact, sep: str = " ") -> str:
         """The editor shows a redacted view. Unchanged view -> keep the stored text untouched; edited view ->
         keep what you wrote and append the parts that were hidden from you, so saving never deletes them."""
         shown = redact(stored)
         if (submitted or "").strip() == (shown or "").strip():
             return stored
         removed = [p for p in _split_parts(stored) if p not in _split_parts(shown)]
-        return " ".join([(submitted or "").strip()] + removed).strip()
+        mine = (submitted or "").strip()
+        if removed and sep == " " and mine and mine[-1] not in ".!?;":
+            mine += "."                      # keep your edit a sentence of its own
+        return sep.join([x for x in [mine] + removed if x]).strip()
 
     def _split_parts(text: str):
         return [p.strip() for p in re.split(r"(?<=[.!?;])\s+|;\s*", text or "") if p.strip()]
@@ -483,7 +486,7 @@ def build_router(deps: ApiDeps) -> APIRouter:
             hidden, visible = _hidden_visible(db, char)
             if bio is not None:
                 bio = _keep_hidden(char.get("relationship_summary") or "", bio,
-                                   lambda t: _ask.redact_bio(t, hidden, visible))
+                                   lambda t: _ask.redact_bio(t, hidden, visible), sep="; ")
             stored = {(row["season"], row["episode"]): row for row in db.get_user_arcs(character_id)}
             for en in entries:
                 old = stored.get((en.get("season"), en.get("episode")))
