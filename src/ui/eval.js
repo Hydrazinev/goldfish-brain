@@ -75,10 +75,19 @@ async function viewEval() {
     const tags=h('div',{class:'row wrap'});
     ['dark','profile','small','occluded'].forEach(tag=>{const input=h('input',{type:'checkbox',checked:(face.tags||[]).includes(tag),'aria-label':tag});input.addEventListener('change',()=>{face.tags=input.checked?[...new Set([...(face.tags||[]),tag])]:(face.tags||[]).filter(t=>t!==tag);changed();});tags.append(h('label',{class:'check'},input,tag));});
     // One-click picker: a photo for every character, then the special answers.
-    const pick=value=>{face.identity=value;identity.value=value;changed();const next=faces.findIndex((f,i)=>i!==selected&&!f.identity);if(next>=0)selected=next;drawEditor();};
+    const pick=value=>{face.identity=value;identity.value=value;changed();const next=faces.findIndex((f,i)=>i!==selected&&!f.identity);if(next>=0)selected=next;drawEditor();paint();};
     const grid=h('div',{class:'pick-grid',role:'group','aria-label':'Click who this face is'},...(info.choices||[]).map(c=>h('button',{type:'button',class:'pick','aria-pressed':String(face.identity===c.id),title:c.name,onclick:()=>pick(c.id)},h('img',{src:`/api/characters/${encodeURIComponent(c.id)}/photo`,alt:'',loading:'lazy',width:56,height:56}),h('span',{text:c.name}))));
     const specials=h('div',{class:'pick-grid specials'},...[['extra','Extra / not cast'],['not_in_gallery','Cast, no photos'],['cant_determine','Not sure'],['false_detection','Not a face']].map(([v,t])=>h('button',{type:'button',class:'pick special','aria-pressed':String(face.identity===v),onclick:()=>pick(v)},t)));
-    editor.append(h('h3',{text:`Face ${selected+1}: click who it is`}),grid,specials,h('details',{},h('summary',{text:'Use the list instead'}),identity),coords,tags);
+    // Fix a mis-sized box without redrawing it: nudge, resize, or (after revealing) snap to the detector's box.
+    const adjust=(dx,dy,scale)=>{const [l,t,r,b]=face.bbox,cx=(l+r)/2+dx*info.width*.01,cy=(t+b)/2+dy*info.height*.01,w=(r-l)*scale,hh=(b-t)*scale;
+      face.bbox=[Math.max(0,cx-w/2),Math.max(0,cy-hh/2),Math.min(info.width,cx+w/2),Math.min(info.height,cy+hh/2)];changed();drawEditor();paint();};
+    const fix=h('div',{class:'row wrap'},...[['Bigger',0,0,1.1],['Smaller',0,0,.9],['←',-1,0,1],['→',1,0,1],['↑',0,-1,1],['↓',0,1,1]].map(([t,dx,dy,k])=>h('button',{type:'button',class:'pick special',text:t,title:'Adjust this box',onclick:()=>adjust(dx,dy,k)})));
+    const detected=(info.predictions||[]).filter(q=>q.bbox);
+    if(detected.length){fix.append(h('button',{type:'button',class:'pick special',text:'Snap to detector box',onclick:()=>{
+      const [l,t,r,b]=face.bbox,cx=(l+r)/2,cy=(t+b)/2;let best=null,bd=1e18;
+      detected.forEach(q=>{const d=Math.hypot((q.bbox[0]+q.bbox[2])/2-cx,(q.bbox[1]+q.bbox[3])/2-cy);if(d<bd){bd=d;best=q;}});
+      if(best){face.bbox=[...best.bbox];changed();drawEditor();paint();}}}));}
+    editor.append(h('h3',{text:`Face ${selected+1}: click who it is`}),grid,specials,h('p',{class:'help',text:'Box is the wrong size or place? Adjust it:'}),fix,h('details',{},h('summary',{text:'Use the list instead'}),identity),coords,tags);
   };
   const addBox=box=>{faces.push({bbox:box,identity:'',tags:[]});selected=faces.length-1;noFaces.checked=false;drawEditor();changed();};
   const point=e=>{const r=canvas.getBoundingClientRect();return[Math.max(0,Math.min(canvas.width,(e.clientX-r.left)*canvas.width/r.width)),Math.max(0,Math.min(canvas.height,(e.clientY-r.top)*canvas.height/r.height))];};
