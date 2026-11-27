@@ -5,6 +5,7 @@ import AppKit
 /// Pure rendering of a `CharacterCard`; every action comes in as a closure.
 struct DossierFrontView: View {
     static let limitedHint = "Story notes aren't available for this show yet."
+    static let possibleHint = "Possible match — not sure. Story details are hidden until the match is confident."
 
     let card: CharacterCard
     let photo: NSImage?
@@ -20,6 +21,7 @@ struct DossierFrontView: View {
     let onFlip: () -> Void
 
     private var isLimited: Bool { card.limited == true }
+    private var isPossible: Bool { card.possible == true }
     private var percent: Int { Int((min(max(card.confidence, 0), 1) * 100).rounded()) }
 
     var body: some View {
@@ -56,7 +58,7 @@ struct DossierFrontView: View {
                 .frame(maxWidth: .infinity)
 
                 if isLimited {
-                    Text(Self.limitedHint)
+                    Text(isPossible ? Self.possibleHint : Self.limitedHint)
                         .font(DossierTheme.typewriter(12.5))
                         .foregroundStyle(DossierTheme.ink)
                         .multilineTextAlignment(.center)
@@ -93,7 +95,7 @@ struct DossierFrontView: View {
     private var accessibilityDescription: String {
         var parts = [card.name]
         if let actor = card.actor, !actor.isEmpty { parts.append("played by \(actor)") }
-        if isLimited { parts.append(Self.limitedHint) } else {
+        if isLimited { parts.append(isPossible ? Self.possibleHint : Self.limitedHint) } else {
             parts.append(DossierMatchBar.accessibilityText(percent: percent))
             if let status = card.status, !status.isEmpty { parts.append("status \(status)") }
             if let stampText { parts.append(stampText.lowercased()) }

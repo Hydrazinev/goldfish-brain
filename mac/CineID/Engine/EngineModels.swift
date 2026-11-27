@@ -20,6 +20,8 @@ struct CharacterCard: Decodable, Identifiable, Equatable {
     let importanceRank: Int?
     /// True when the show has no character notes yet: identify only, show no story.
     let limited: Bool?
+    /// True for a weaker match (below the normal cut-off): show it hedged, name and actor only.
+    var possible: Bool? = nil
     /// "start" when the story text describes the start of this episode (no playback progress was sent).
     var asOf: String? = nil
     /// The actor's other well-known work ("Better Call Saul (2015)"); empty or absent until the engine has cached it.

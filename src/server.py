@@ -39,6 +39,9 @@ _CONFIG_PATH = _DATA_DIR / "config.json"
 _UI_DIR = Path(__file__).parent / "ui"
 _MODEL_NAME = "buffalo_l"
 _SIMILARITY_THRESHOLD = 0.5
+# Real Netflix frames score lower than clean photos: a face between this and the threshold is shown as a
+# clearly hedged "possible match" (name and actor only, no story). Set to 0 (or >= threshold) to turn it off.
+_POSSIBLE_MIN = float(os.environ.get("CINEID_POSSIBLE_MIN", "0.40"))
 # A face is matched only if its best score is at least this far above the runner-up
 # (else it is "not sure", never a coin-flip name). Measured, see docs/ACCURACY.md.
 try:
@@ -362,6 +365,7 @@ def identify(req: IdentifyRequest):
     hidden_by_shield = 0
 
     face_hits: list[list[tuple[str, float]]] = []
+    face_top: list = []        # each face's best raw match (character_id, score), before any cut-off
     face_log: list[dict] = []
     eval_faces, face_indices = [], []
     for detection_i, (_crop, _bbox, face) in enumerate(face_detections):
@@ -388,6 +392,7 @@ def identify(req: IdentifyRequest):
                                        eligible=True)
         face_indices.append(detection_i)
         face_hits.append(hits)
+        face_top.append(matches[0] if matches else None)
         face_log.append({"score": round(float(top1), 4), "margin": round(float(margin), 4),
                          "p_correct": None if _aug_gallery else calibration.calibrated_confidence(top1, margin),
                          "face_h": accuracy.face_height(_bbox), "character_id": None})
@@ -425,6 +430,29 @@ def identify(req: IdentifyRequest):
         result["as_of"] = as_of
         result["also_in"] = also_in
         characters.append(result)
+
+    # Hedged tier: faces that missed the cut-off narrowly. Same spoiler shield; name and actor only.
+    if 0 < _POSSIBLE_MIN < _SIMILARITY_THRESHOLD:
+        claimed = {a[0] for a in _assign_one_to_one(face_hits) if a}
+        for face_i, top in enumerate(face_top):
+            if face_hits[face_i] or top is None or face_log[face_i]["margin"] < _MIN_MARGIN:
+                continue
+            cid, score = top
+            if cid in claimed or not (_POSSIBLE_MIN <= score < _SIMILARITY_THRESHOLD):
+                continue
+            char = db.get_character(cid)
+            if char is None:
+                continue
+            arc, _ = _pick_arc(db, cid, req.season, req.episode, req.progress)
+            if _visibility(char, req.season, req.episode, arc) == "hidden":
+                continue
+            claimed.add(cid)
+            row = _limited_result(char, score)
+            row["possible"] = True
+            row["also_in"] = actor_credits.cached_also_in(db, char, show_tmdb_id)
+            characters.append(row)
+            face_log[face_i]["possible_character_id"] = cid
+            eval_faces[face_indices[face_i]]["possible_character_id"] = cid
 
     characters = _dedupe_and_rank(characters)
 
