@@ -15,14 +15,14 @@ demoButtons.forEach(button => {
       document.getElementById(`${item.dataset.demo}-demo`).hidden = !active;
     });
     document.getElementById("card-label").textContent = demoNames[selected];
-    demoAnnouncement.textContent = `${demoNames[selected]} preview selected. Fictional example.`;
+    demoAnnouncement.textContent = `${demoNames[selected]} preview selected. Illustrative FROM preview.`;
   });
 });
 
 const positions = [
-  { boundary: "AS OF START OF S1E3", note: "The town’s new librarian. Helping the others piece together an old map." },
-  { boundary: "AS OF START OF S2E1", note: "Mara has opened the archive to the group. They’re comparing the map with the town’s old records." },
-  { boundary: "AS OF START OF S2E5", note: "The group has found a second map. Mara is checking where the two versions disagree." }
+  { boundary: "AS OF START OF S1E3", note: "The town’s self-appointed sheriff, trying to keep the residents safe." },
+  { boundary: "AS OF START OF S2E1", note: "Your notes would update here as you reach a new season. Later events stay hidden in this preview." },
+  { boundary: "AS OF START OF S2E5", note: "Only context up to this episode would appear here. This public preview contains no later plot details." }
 ];
 const episodeButtons = document.querySelectorAll("[data-episode]");
 episodeButtons.forEach(button => {
