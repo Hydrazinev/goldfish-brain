@@ -92,13 +92,8 @@ def _name_tokens(name: str) -> set[str]:
     return {t for t in relationships._tokens(name) if len(t) >= _MIN_TOKEN and t.isalpha()}
 
 
-def redact_bio(summary: Optional[str], hidden_names, visible_names=()) -> str:
-    """A relationship summary with every clause removed that could spoil the story.
-
-    Drops a clause when it names a character the viewer has not met (the full
-    name, or a first/last-name token of 4+ letters that belongs to exactly one
-    hidden name and to no visible one) or when it hints at change over time
-    (later, ex-, former, turns, becomes ...). Clauses are re-joined with "; "."""
+def _hidden_matcher(hidden_names, visible_names=()):
+    """A predicate: does this text name a character the viewer has not met?"""
     hidden_names = [n for n in hidden_names if n]
     patterns = [re.compile(r"(?<!\w)" + re.escape(" ".join(n.split())).replace(r"\ ", r"\s+")
                            + r"(?!\w)", re.I) for n in hidden_names]
@@ -110,12 +105,30 @@ def redact_bio(summary: Optional[str], hidden_names, visible_names=()) -> str:
     tokens = {t for t, k in counts.items() if k == 1 and t not in seen_in_visible}
     token_re = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, sorted(tokens))) + r")(?!\w)", re.I) \
         if tokens else None
+    return lambda text: any(p.search(text) for p in patterns) or bool(token_re and token_re.search(text))
+
+
+def redact_text(text: Optional[str], hidden_names, visible_names=()) -> str:
+    """Per-episode note text with every sentence removed that names a character the viewer has not met."""
+    names_hidden = _hidden_matcher(hidden_names, visible_names)
+    parts = re.split(r"(?<=[.!?;])\s+", (text or "").strip())
+    return " ".join(p for p in parts if p and not names_hidden(p))
+
+
+def redact_bio(summary: Optional[str], hidden_names, visible_names=()) -> str:
+    """A relationship summary with every clause removed that could spoil the story.
+
+    Drops a clause when it names a character the viewer has not met (the full
+    name, or a first/last-name token of 4+ letters that belongs to exactly one
+    hidden name and to no visible one) or when it hints at change over time
+    (later, ex-, former, turns, becomes ...). Clauses are re-joined with "; "."""
+    names_hidden = _hidden_matcher(hidden_names, visible_names)
     kept = []
     for clause in relationships._CLAUSE.split(summary or ""):
         clause = clause.strip()
         if not clause or _ARC_HINT.search(clause):
             continue
-        if any(p.search(clause) for p in patterns) or (token_re and token_re.search(clause)):
+        if names_hidden(clause):
             continue
         kept.append(clause)
     return "; ".join(kept)
@@ -151,9 +164,13 @@ def gather_context(db, show_id: str, season: int, episode: int,
             if (arc.get("status") or "").lower() not in ("", "unknown"):
                 bits.append(f'status: {arc["status"]}')
             if arc.get("current_arc"):
-                bits.append(f'story so far: {_clip(arc["current_arc"])}')
+                _arc = redact_text(arc["current_arc"], hidden_names, visible_names)
+                if _arc:
+                    bits.append(f'story so far: {_clip(_arc)}')
             if arc.get("last_seen_description"):
-                bits.append(f'last seen: {_clip(arc["last_seen_description"])}')
+                _seen = redact_text(arc["last_seen_description"], hidden_names, visible_names)
+                if _seen:
+                    bits.append(f'last seen: {_clip(_seen)}')
         notes.append(line + (": " + "; ".join(bits) if bits else ""))
     return {"show_name": show.get("show_name") or show_id, "season": season,
             "episode": episode, "progress": progress, "as_of": as_of,

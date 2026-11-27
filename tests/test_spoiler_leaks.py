@@ -205,3 +205,16 @@ def test_notes_put_is_unchanged_for_hidden_characters():
     e = cast_env(pos(1, 2))
     r = e.client.put("/api/characters/jane/notes", json={"entries": []})
     assert r.status_code == 200
+
+
+def test_redact_text_drops_sentences_naming_unmet_characters():
+    import ask
+    text = "Gus runs the laundry. He is working with Mike Ehrmantraut. Walt is wary of him."
+    out = ask.redact_text(text, hidden_names=["Mike Ehrmantraut"], visible_names=["Gus Fring", "Walter White"])
+    assert "Mike" not in out and "Ehrmantraut" not in out
+    assert "Gus runs the laundry." in out and "Walt is wary of him." in out
+
+
+def test_redact_text_keeps_everything_when_nobody_is_hidden():
+    import ask
+    assert ask.redact_text("A. B. C.", hidden_names=[], visible_names=["X"]) == "A. B. C."
