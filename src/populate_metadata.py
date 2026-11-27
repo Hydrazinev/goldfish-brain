@@ -247,6 +247,22 @@ def _show_overview(tmdb_id, tmdb_key: str) -> str:
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+def _apply_single(db, char: dict, meta: dict) -> None:
+    """Write single-episode notes; an owner-edited bio is never overwritten."""
+    bio = meta.get("relationship_summary")
+    if db.is_bio_user_edited(char["character_id"]):
+        bio = char.get("relationship_summary")
+    db._conn.execute(
+        """UPDATE characters
+           SET status=?, current_arc=?, relationship_summary=?,
+               last_seen_description=?, arc_type=?
+           WHERE character_id=?""",
+        (meta.get("status"), meta.get("current_arc"), bio,
+         meta.get("last_seen_description"), meta.get("arc_type"), char["character_id"]),
+    )
+    db._conn.commit()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--show",         default=None)
@@ -302,7 +318,10 @@ def main():
                 bio = _generate_bio(client, show_name, name,
                                     char.get("actor_name") or "",
                                     char.get("role") or "", overview)
-                if bio:
+                if bio and db.is_bio_user_edited(char["character_id"]):
+                    print("kept your edited bio")
+                    ok += 1
+                elif bio:
                     db.update_character_bio(char["character_id"], bio)
                     print("done")
                     ok += 1
@@ -441,21 +460,7 @@ def main():
                 char.get("role") or "",
                 season, episode,
             )
-            db._conn.execute(
-                """UPDATE characters
-                   SET status=?, current_arc=?, relationship_summary=?,
-                       last_seen_description=?, arc_type=?
-                   WHERE character_id=?""",
-                (
-                    meta.get("status"),
-                    meta.get("current_arc"),
-                    meta.get("relationship_summary"),
-                    meta.get("last_seen_description"),
-                    meta.get("arc_type"),
-                    char["character_id"],
-                ),
-            )
-            db._conn.commit()
+            _apply_single(db, char, meta)
             print("done")
             ok += 1
         except Exception as exc:

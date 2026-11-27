@@ -352,7 +352,8 @@ private final class FakeCapture: ScreenCapturing {
 }
 
 private struct FakeResolver: EpisodeResolving {
-    func resolve(frame: CGImage) -> ResolvedEpisode { ResolvedEpisode(season: 3, episode: 7, source: .chrome) }
+    var source: ResolvedEpisode.Source = .chrome
+    func resolve(frame: CGImage) -> ResolvedEpisode { ResolvedEpisode(season: 3, episode: 7, source: source, watchId: "55") }
 }
 
 private final class FakeAsk: AskAPI {
@@ -364,6 +365,12 @@ private final class FakeAsk: AskAPI {
         if delay > 0 { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
         return try result.get()
     }
+}
+
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock(); private var n = 0
+    func bump() { lock.withLock { n += 1 } }
+    var value: Int { lock.withLock { n } }
 }
 
 @MainActor
@@ -385,12 +392,46 @@ final class AskFlowTests: XCTestCase {
 
     func testProgressFromTheProviderIsSentWithTheQuestion() async {
         let withProgress = AskFlow(client: client, engine: engine, supervisor: status, capture: capture,
-                                   resolver: FakeResolver(), model: model, timeout: 2, progressProvider: { 0.95 })
+                                   resolver: FakeResolver(), model: model, timeout: 2,
+                                   progressProvider: { PlaybackReading(watchId: "55", progress: 0.95) })
         withProgress.hotKeyPressed()
         model.draft = "Who?"
         withProgress.submit()
         await settle { self.isAnswer() }
         XCTAssertEqual(client.requests.first?.progress, 0.95)
+    }
+
+    func testProgressIsReadWithTheCaptureNotAtSubmit() async {
+        let reads = Counter()
+        let f = AskFlow(client: client, engine: engine, supervisor: status, capture: capture,
+                        resolver: FakeResolver(), model: model, timeout: 2,
+                        progressProvider: { reads.bump(); return PlaybackReading(watchId: "55", progress: 0.5) })
+        f.hotKeyPressed()
+        await settle { self.capture.captures == 1 && reads.value == 1 }
+        XCTAssertEqual(reads.value, 1, "read when the hotkey opened the box")
+        model.draft = "Who?"
+        f.submit()
+        await settle { self.isAnswer() }
+        XCTAssertEqual(reads.value, 1, "not read again at submit")
+        XCTAssertEqual(client.requests.first?.progress, 0.5)
+    }
+
+    func testProgressFromAnotherTabIsDropped() async {
+        let f = AskFlow(client: client, engine: engine, supervisor: status, capture: capture,
+                        resolver: FakeResolver(), model: model, timeout: 2,
+                        progressProvider: { PlaybackReading(watchId: "99", progress: 0.95) })
+        f.hotKeyPressed(); model.draft = "Who?"; f.submit()
+        await settle { self.isAnswer() }
+        XCTAssertNil(client.requests.first?.progress)
+    }
+
+    func testProgressWithAFallbackEpisodeIsDropped() async {
+        let f = AskFlow(client: client, engine: engine, supervisor: status, capture: capture,
+                        resolver: FakeResolver(source: .stored), model: model, timeout: 2,
+                        progressProvider: { PlaybackReading(watchId: "55", progress: 0.95) })
+        f.hotKeyPressed(); model.draft = "Who?"; f.submit()
+        await settle { self.isAnswer() }
+        XCTAssertNil(client.requests.first?.progress)
     }
 
     func testHotkeyOpensTheFieldAndCapturesInTheBackgroundBeforeAnyQuestion() async {

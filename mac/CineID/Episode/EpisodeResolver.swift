@@ -10,6 +10,8 @@ struct ResolvedEpisode: Equatable {
     var title: String? = nil
     /// False when only the episode number was known and `season` is the stored one, provisionally.
     var seasonKnown: Bool = true
+    /// The Netflix watch id of the tab the episode was read from (Chrome detection only).
+    var watchId: String? = nil
 }
 
 /// Works out which episode is playing: Chrome's page data first, then on-screen text, then the stored position.
@@ -48,17 +50,18 @@ final class EpisodeResolver {
 
     private func fromChrome(storedSeason: Int) -> ResolvedEpisode? {
         guard chrome.isRunning(), let tab = chrome.activeTab(), ChromeParsers.isNetflixWatch(url: tab.url) else { return nil }
+        let watchId = ChromeParsers.watchId(url: tab.url)
         // 1. React context (season + episode). 2. Player title element (episode + name, season only sometimes).
         if let episode = chrome.runJS(Self.reactContextJS).flatMap(ChromeParsers.parseReactContext),
            let season = episode.season, Self.isSane(season: season, episode: episode.episode) {
-            return ResolvedEpisode(season: season, episode: episode.episode, source: .chrome)
+            return ResolvedEpisode(season: season, episode: episode.episode, source: .chrome, watchId: watchId)
         }
         if let video = chrome.runJS(Self.videoTitleJS).flatMap(ChromeParsers.parseVideoTitle) {
             let season = video.season ?? storedSeason
             if Self.isSane(season: season, episode: video.episode) {
                 return ResolvedEpisode(season: season, episode: video.episode, source: .chrome,
                                        title: video.title.isEmpty ? nil : video.title,
-                                       seasonKnown: video.season != nil)
+                                       seasonKnown: video.season != nil, watchId: watchId)
             }
         }
         // 3. The pause overlay (season + episode + name), present only while paused; the player title above
@@ -66,7 +69,7 @@ final class EpisodeResolver {
         if let video = chrome.runJS(Self.pauseOverlayJS).flatMap(ChromeParsers.parsePauseOverlay),
            let season = video.season, Self.isSane(season: season, episode: video.episode) {
             return ResolvedEpisode(season: season, episode: video.episode, source: .chrome,
-                                   title: video.title.isEmpty ? nil : video.title)
+                                   title: video.title.isEmpty ? nil : video.title, watchId: watchId)
         }
         return nil
     }

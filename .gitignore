@@ -63,3 +63,5 @@ data/accuracy_log.jsonl
 
 # eval output (raw model answers, cached TMDB summaries)
 data/eval/
+PROJECT_STORY.md
+PROJECT_STORY.pdf

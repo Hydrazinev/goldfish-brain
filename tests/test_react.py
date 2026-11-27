@@ -99,7 +99,7 @@ def test_react_remembers_last_three_and_tells_model_not_to_repeat():
     assert all(f"Reaction number {i}." in p for i in (1, 2, 3))
     assert "Reaction number 0." not in p
     assert "do not repeat" in p.lower()
-    assert [t for _, _, t in ask._recent_reactions["bb"]] == ["Reaction number 2.", "Reaction number 3.", "Reaction number 4."]
+    assert [e[2] for e in ask._recent_reactions["bb"]] == ["Reaction number 2.", "Reaction number 3.", "Reaction number 4."]
 
 
 def test_react_does_not_remember_refusals():
@@ -168,3 +168,16 @@ def test_react_after_rewind_does_not_show_later_reaction_in_prompt():
     e.claude.reply = {"answer": "Early one.", "refused": False}
     react(e, season=1, episode=2)
     assert "Late episode secret." not in prompt_of(e)
+
+
+def test_rewind_inside_the_same_episode_forgets_later_reactions():
+    ask._remember_reaction("bb", 1, 2, "late in ep", 0.9)
+    ask._remember_reaction("bb", 1, 2, "early in ep", 0.1)
+    assert ask.recent_for("bb", 1, 2, 0.5) == ("early in ep",)
+
+
+def test_unknown_current_progress_drops_same_episode_entries_with_progress():
+    ask._remember_reaction("bb", 1, 2, "has progress", 0.4)
+    ask._remember_reaction("bb", 1, 2, "no progress")
+    ask._remember_reaction("bb", 1, 1, "earlier ep", 0.9)
+    assert ask.recent_for("bb", 1, 2, None) == ("no progress", "earlier ep")

@@ -39,6 +39,7 @@ def log_faces(data_dir, rows: list[dict], *, show_id: str, season: int, episode:
             lines.append(json.dumps({
                 "ts": ts, "show_id": show_id, "season": season, "episode": episode,
                 "score": r.get("score"), "margin": r.get("margin"), "face_h": r.get("face_h"),
+                "p_correct": r.get("p_correct"),
                 "matched": cid is not None, "character_id": cid,
                 "not_sure": bool(r.get("not_sure")),
             }) + "\n")

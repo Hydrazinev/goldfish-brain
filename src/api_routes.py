@@ -432,9 +432,19 @@ def build_router(deps: ApiDeps) -> APIRouter:
         entries = [{k: row.get(k) for k in ("season", "episode", "status", "arc_type",
                                             "current_arc", "last_seen_description")}
                    for row in db.get_user_arcs(character_id)]
+        bio = char.get("relationship_summary") or ""
+        if not all:
+            # The notes can name characters the viewer has not met yet: drop those sentences.
+            hidden, visible = [], []
+            for c in db.get_show_characters(char["show_id"]):
+                (visible if _is_met(db, c, season, episode) else hidden).append(c["character_name"])
+            bio = _ask.redact_bio(bio, hidden, visible)
+            for en in entries:
+                for k in ("current_arc", "last_seen_description"):
+                    en[k] = _ask.redact_text(en[k], hidden, visible)
         return {"character_id": character_id, "name": char["character_name"],
                 "actor": char.get("actor_name"),
-                "relationship_summary": char.get("relationship_summary") or "",
+                "relationship_summary": bio,
                 "entries": entries,
                 "also_in": actor_credits.cached_also_in(db, char, show.get("tmdb_id")),
                 "ai_rows": db.count_ai_arcs(character_id)}

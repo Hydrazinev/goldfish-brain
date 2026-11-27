@@ -85,11 +85,16 @@ def previous_summaries(guide: Optional[list], season: int, episode: int) -> str:
 
 _ARC_HINT = re.compile(
     r"\b(?:later|eventually|ex|former|formerly|turns|turned|becomes|ultimately|finally)\b", re.I)
-_MIN_TOKEN = 4
+_MIN_TOKEN = 3
+# Short common words that must never count as a partial name (a hidden "Sue Old" is not "old").
+_STOPWORDS = frozenset("""the and his her she him who was for can old new one two you are but not all any out day
+    had has have its our their them then than that this these those with from into over off got get let may way
+    why how now yes man boy men red big low high mrs mr dr sir lady lord king queen""".split())
 
 
 def _name_tokens(name: str) -> set[str]:
-    return {t for t in relationships._tokens(name) if len(t) >= _MIN_TOKEN and t.isalpha()}
+    return {t for t in relationships._tokens(name)
+            if len(t) >= _MIN_TOKEN and t.isalpha() and t.lower() not in _STOPWORDS}
 
 
 def _hidden_matcher(hidden_names, visible_names=()):
@@ -119,7 +124,7 @@ def redact_bio(summary: Optional[str], hidden_names, visible_names=()) -> str:
     """A relationship summary with every clause removed that could spoil the story.
 
     Drops a clause when it names a character the viewer has not met (the full
-    name, or a first/last-name token of 4+ letters that belongs to exactly one
+    name, or a first/last-name token of 3+ letters (not a common word) that belongs to exactly one
     hidden name and to no visible one) or when it hints at change over time
     (later, ex-, former, turns, becomes ...). Clauses are re-joined with "; "."""
     names_hidden = _hidden_matcher(hidden_names, visible_names)
@@ -242,20 +247,30 @@ _RECENT_KEEP = 3
 # show_id -> [(season, episode, text)]: the last few reactions (in memory only), so they don't repeat.
 # Keyed by show and stamped with the viewer's position, so a rewind or another show never
 # feeds a later episode's reaction into the prompt.
-_recent_reactions: dict[str, list[tuple[int, int, str]]] = {}
+# Each entry is (season, episode, text, progress or None).
+_recent_reactions: dict[str, list[tuple]] = {}
 
 
-def recent_for(show_id: str, season: int, episode: int) -> tuple[str, ...]:
-    """Reactions to repeat-proof against: this show only, nothing from a later position (a rewind
-    drops those for good)."""
-    kept = [e for e in _recent_reactions.get(show_id, []) if (e[0], e[1]) <= (season, episode)]
+def _later_than_now(entry, season: int, episode: int, progress: Optional[float]) -> bool:
+    if (entry[0], entry[1]) != (season, episode):
+        return (entry[0], entry[1]) > (season, episode)
+    if entry[3] is None:
+        return False
+    return progress is None or entry[3] > progress      # unknown now: be conservative
+
+
+def recent_for(show_id: str, season: int, episode: int, progress: Optional[float] = None) -> tuple[str, ...]:
+    """Reactions to repeat-proof against: this show only, nothing from a later position (a rewind,
+    even within the same episode, drops those for good)."""
+    kept = [e for e in _recent_reactions.get(show_id, []) if not _later_than_now(e, season, episode, progress)]
     _recent_reactions[show_id] = kept
-    return tuple(text for _, _, text in kept[-_RECENT_KEEP:])
+    return tuple(e[2] for e in kept[-_RECENT_KEEP:])
 
 
-def _remember_reaction(show_id: str, season: int, episode: int, text: str) -> None:
+def _remember_reaction(show_id: str, season: int, episode: int, text: str,
+                       progress: Optional[float] = None) -> None:
     entries = _recent_reactions.setdefault(show_id, [])
-    entries.append((season, episode, text))
+    entries.append((season, episode, text, progress))
     del entries[:-_RECENT_KEEP]
 
 
@@ -342,7 +357,7 @@ def answer(client, db, *, question: str = "", image_b64: Optional[str], show_id:
     ctx = gather_context(db, show_id, season, episode, progress, guide)
     if react:
         name, personality = buddy_persona(buddy)
-        prompt = build_react_prompt(ctx, name, personality, recent_for(show_id, season, episode))
+        prompt = build_react_prompt(ctx, name, personality, recent_for(show_id, season, episode, progress))
     else:
         prompt = build_prompt(question, ctx)
     data = llm.ask_json(client, prompt, max_tokens=MAX_TOKENS,
@@ -356,5 +371,5 @@ def answer(client, db, *, question: str = "", image_b64: Optional[str], show_id:
     if react:
         result["buddy_name"] = name
         if not result["refused"]:
-            _remember_reaction(show_id, season, episode, text)
+            _remember_reaction(show_id, season, episode, text, progress)
     return result

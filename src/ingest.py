@@ -21,6 +21,7 @@ from recogniser import FaceRecogniser, FaceIndex
 from database import CharacterDB
 from job_events import emit
 import photo_clean
+import gallery_aug
 
 _ROOT = Path(__file__).parent.parent
 _DATA_DIR = _ROOT / "data"
@@ -324,7 +325,7 @@ def ingest_show(show_name: str, tmdb_id: Optional[int] = None) -> None:
                 clean_images = _drop_outlier_photos(clean_images, recogniser, character_name)
 
                 # Step 5 — build mean embedding gallery
-                gallery = recogniser.build_gallery(clean_images)
+                gallery = gallery_aug.build_gallery(recogniser, clean_images)
                 if gallery is None:
                     tqdm.write(f"  [skip] {character_name}: build_gallery returned None")
                     skipped += 1

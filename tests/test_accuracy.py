@@ -64,10 +64,13 @@ def test_one_log_line_per_face_with_no_image_or_names(monkeypatch):
     rows = _log()
     assert len(rows) == 2
     assert set(rows[0]) == {"ts", "show_id", "season", "episode", "score", "margin", "face_h",
-                            "matched", "character_id", "not_sure"}
+                            "matched", "character_id", "not_sure", "p_correct"}
     assert rows[0]["matched"] is True and rows[0]["character_id"] == "s-a"
     assert rows[0]["score"] == 0.9 and rows[0]["margin"] == 0.4 and rows[0]["face_h"] == 150.0
     assert rows[0]["not_sure"] is False
+    assert 0.0 <= rows[0]["p_correct"] <= 1.0 and rows[0]["p_correct"] > rows[1]["p_correct"]
+    body = r.json()["characters"][0]
+    assert body["calibrated_confidence"] == rows[0]["p_correct"] and body["confidence"] == 0.9
     assert rows[1]["matched"] is False and rows[1]["character_id"] is None
 
 

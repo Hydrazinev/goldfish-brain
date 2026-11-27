@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from recogniser import FaceRecogniser, FaceIndex
 from database import CharacterDB
 import accuracy
+import calibration
 import actor_credits
 import api_routes
 import key_check
@@ -394,6 +395,7 @@ def identify(req: IdentifyRequest):
             hits = []
         face_hits.append(hits)
         face_log.append({"score": round(float(top1), 4), "margin": round(float(margin), 4),
+                         "p_correct": calibration.calibrated_confidence(top1, margin),
                          "face_h": accuracy.face_height(_bbox), "character_id": None})
 
     # One face per character: a second face can no longer be swallowed by the
@@ -420,6 +422,8 @@ def identify(req: IdentifyRequest):
             continue
 
         result = _build_character_result(char, confidence, arc)
+        if abs(face_log[face_i]["score"] - confidence) < 1e-3:     # only when this IS the face's top-1
+            result["calibrated_confidence"] = face_log[face_i]["p_correct"]
         result["as_of"] = as_of
         result["also_in"] = also_in
         characters.append(result)

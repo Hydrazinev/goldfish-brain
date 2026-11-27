@@ -80,3 +80,20 @@ def test_fetching_the_guide_collects_titles_and_summaries(monkeypatch):
     guide = pm._get_episode_guide(9, "k")
     assert guide == [{"season": 1, "episode": 1, "name": "Pilot", "overview": "It begins."},
                      {"season": 1, "episode": 2, "name": "Two", "overview": ""}]
+
+
+def test_single_episode_path_keeps_an_owner_edited_bio():
+    from database import CharacterDB
+    import tempfile, os
+    db = CharacterDB(db_path=os.path.join(tempfile.mkdtemp(), "t.db"))
+    db.add_show("s", "S", tmdb_id=1)
+    db.add_character("c", "s", "Cee", relationship_summary="AI bio")
+    db.add_character("d", "s", "Dee", relationship_summary="AI bio")
+    db.replace_user_arcs("c", [], "My own bio")
+    meta = {"status": "alive", "current_arc": "x", "relationship_summary": "New AI bio",
+            "last_seen_description": "y", "arc_type": "other"}
+    pm._apply_single(db, db.get_character("c"), meta)
+    pm._apply_single(db, db.get_character("d"), meta)
+    assert db.get_character("c")["relationship_summary"] == "My own bio"
+    assert db.get_character("c")["current_arc"] == "x"
+    assert db.get_character("d")["relationship_summary"] == "New AI bio"

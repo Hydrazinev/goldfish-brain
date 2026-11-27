@@ -119,10 +119,27 @@ final class IdentifyFlowTests: XCTestCase {
     }
 
     func testProgressIsSentToTheEngine() async {
+        resolver.result = ResolvedEpisode(season: 1, episode: 2, source: .chrome, watchId: "77")
         let flow = IdentifyFlow(engine: engine, supervisor: status, capture: capture, resolver: resolver, model: model,
-                                timeout: 5, progressProvider: { 0.93 })
+                                timeout: 5, progressProvider: { PlaybackReading(watchId: "77", progress: 0.93) })
         await flow.trigger()
         XCTAssertEqual(engine.identifyProgress, 0.93)
+    }
+
+    func testProgressFromAnotherTabIsNotSent() async {
+        resolver.result = ResolvedEpisode(season: 1, episode: 2, source: .chrome, watchId: "77")
+        let flow = IdentifyFlow(engine: engine, supervisor: status, capture: capture, resolver: resolver, model: model,
+                                timeout: 5, progressProvider: { PlaybackReading(watchId: "88", progress: 0.93) })
+        await flow.trigger()
+        XCTAssertNil(engine.identifyProgress)
+    }
+
+    func testProgressWithAFallbackEpisodeIsNotSent() async {
+        resolver.result = ResolvedEpisode(season: 1, episode: 2, source: .stored, watchId: "77")
+        let flow = IdentifyFlow(engine: engine, supervisor: status, capture: capture, resolver: resolver, model: model,
+                                timeout: 5, progressProvider: { PlaybackReading(watchId: "77", progress: 0.93) })
+        await flow.trigger()
+        XCTAssertNil(engine.identifyProgress)
     }
 
     func testNoProviderOrUnknownProgressSendsNil() async {

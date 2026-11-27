@@ -5,7 +5,7 @@ Text-only (no screenshot ever leaves the machine). Answers come from the real mo
 (claude-sonnet-5-5); a cheap judge (claude-haiku-5-5) grades them. Needs --run to spend money.
 
     venv/bin/python scripts/eval_ask.py --dry-run     # prints the plan and a cost estimate, no API calls
-    venv/bin/python scripts/eval_ask.py --run         # spends (about $0.5, hard cap $2 / 60 calls)
+    venv/bin/python scripts/eval_ask.py --run         # spends (about $0.5, hard cap $1 / 60 calls)
 
 The real data/cineid.db is only READ (a temporary copy is opened); config.json is never touched.
 Episode summaries come from TMDB (cached in data/eval/guides.json after the first fetch).
@@ -36,7 +36,7 @@ RESULTS = EVAL_DIR / "ask_results.json"
 JUDGE_MODEL = "claude-haiku-5-5"
 ANSWER_MODEL = ask.MODEL
 MAX_CALLS = 60
-MAX_COST = 2.00
+MAX_COST = 1.00
 # Deliberately pessimistic list prices ($ per million tokens) used only for the estimate.
 PRICE = {ANSWER_MODEL: (3.0, 15.0), JUDGE_MODEL: (1.0, 5.0)}
 
@@ -83,8 +83,6 @@ TRAPS = [
      "S2E9 'The Badger' (TMDB): the Byrdes get a meeting with the gaming commission, whose approval comes with a big ask."),
     ("b7", "ozark", "What does Wyatt find out about his father?",
      "S2E10 'The Gold Coast' (TMDB): 'Wyatt learns the truth about his dad.'"),
-    ("b8", "ozark", "Does Ruth Langmore survive until the end of the series?",
-     "No. Ruth is shot dead by Javi in the final episode S4E14 'A Hard Way to Go'."),
 ]
 
 # (id, show, question). Nothing in the notes or summaries answers these.

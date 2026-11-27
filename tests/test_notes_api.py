@@ -139,3 +139,19 @@ def test_put_marks_a_changed_bio_as_user_edited():
     assert e.db.is_bio_user_edited("s-a") is False
     put(e, {"relationship_summary": "My words", "entries": []})
     assert e.db.is_bio_user_edited("s-a") is True
+
+
+def test_get_notes_redacts_hidden_character_names_unless_all():
+    e = Env()
+    e.ready_show("s", "S")
+    e.db.add_character("s-a", "s", "Walter White", first_season=1, first_episode=1,
+                       relationship_summary="Teacher turned partner of Gus Fring; father of Flynn")
+    e.db.add_character("s-g", "s", "Gus Fring", first_season=3, first_episode=1)
+    e.db.replace_user_arcs("s-a", [{"season": 1, "episode": 1, "status": "alive", "arc_type": "other",
+                                    "current_arc": "Meets Gus Fring at the lab. Cooks.",
+                                    "last_seen_description": "Home."}])
+    j = e.client.get("/api/characters/s-a/notes").json()
+    assert "Gus" not in j["relationship_summary"] and "Gus" not in str(j["entries"])
+    assert "Cooks." in j["entries"][0]["current_arc"]
+    full = e.client.get("/api/characters/s-a/notes?all=1").json()
+    assert "Gus Fring" in full["relationship_summary"] and "Gus Fring" in full["entries"][0]["current_arc"]

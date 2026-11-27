@@ -245,3 +245,16 @@ def test_ask_progress_is_optional_and_clamped():
     e = Env(config=ACK)
     assert e.ask(progress=None).status_code == 200
     assert e.ask(progress=7).status_code == 200
+
+
+def test_short_first_name_of_a_hidden_character_is_redacted():
+    assert ask.redact_text("Ben warned her. Dinner was nice.", ["Ben Davis"], []) == "Dinner was nice."
+    assert ask.redact_bio("Friend of Ben; a baker", ["Ben Davis"], []) == "a baker"
+
+
+def test_short_name_shared_with_a_visible_character_is_kept():
+    assert ask.redact_text("Dan waved.", ["Dan Reed"], ["Dan Hill"]) == "Dan waved."
+
+
+def test_common_short_words_are_not_treated_as_names():
+    assert ask.redact_text("She was the one who can win.", ["Sue Old", "Ann One"], []) == "She was the one who can win."

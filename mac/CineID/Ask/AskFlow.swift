@@ -12,6 +12,8 @@ final class AskFlow {
         let showId: String
         let season: Int
         let episode: Int
+        /// Read at the same moment as the screenshot; nil unless it provably belongs to this episode.
+        let progress: Double?
     }
 
     private enum Prep {
@@ -29,7 +31,7 @@ final class AskFlow {
     private let timeout: TimeInterval
     private let seasonLookupTimeout: TimeInterval
     private let serverStartedAt: () -> Date
-    private let progressProvider: (() async -> Double?)?
+    private let progressProvider: (() async -> PlaybackReading?)?
     private var prep: Task<Prep, Never>?
     private var asking: Task<Void, Never>?
     private var generation = 0
@@ -38,7 +40,7 @@ final class AskFlow {
     init(client: AskAPI, engine: EngineAPI, supervisor: StatusProviding, capture: ScreenCapturing,
          resolver: EpisodeResolving, model: AskModel, storedPosition: StoredPosition = StoredPosition(),
          serverStartedAt: @escaping () -> Date = Date.init, timeout: TimeInterval = AskClient.timeout,
-         seasonLookupTimeout: TimeInterval = 5, progressProvider: (() async -> Double?)? = nil) {
+         seasonLookupTimeout: TimeInterval = 5, progressProvider: (() async -> PlaybackReading?)? = nil) {
         self.client = client
         self.engine = engine
         self.supervisor = supervisor
@@ -126,6 +128,10 @@ final class AskFlow {
             guard let showId = state.current.showId, !showId.isEmpty else { return .failed(FriendlyError.text(.showNotSetUp(nil))) }
             storedPosition.set(season: state.current.season, episode: state.current.episode)
 
+            // Read the playback position now, alongside the capture (not at submit, when the tab may have changed).
+            let progressTask = Task { await progressProvider?() }
+            defer { progressTask.cancel() }
+
             // The screenshot goes to Anthropic: only the Chrome window, unless the owner turned that off.
             let windowOnly = state.shareOnlyWindow ?? true
             let image = try await withDeadline(timeout) { [capture] in
@@ -138,7 +144,9 @@ final class AskFlow {
                 let episode = try await EpisodeDetection.resolve(
                     frame: image, showId: showId, resolver: resolver, engine: engine,
                     timeout: timeout, seasonLookupTimeout: seasonLookupTimeout)
-                return .ready(Prepared(jpeg: jpeg, showId: showId, season: episode.season, episode: episode.episode))
+                let progress = PlaybackProgress.attachable(await progressTask.value, to: episode)
+                return .ready(Prepared(jpeg: jpeg, showId: showId, season: episode.season, episode: episode.episode,
+                                       progress: progress))
             }
         } catch let error as EngineError {
             return .failed(FriendlyError.text(FlowFailure.from(error, serverAge: Date().timeIntervalSince(serverStartedAt()), showName: nil)))
@@ -164,10 +172,8 @@ final class AskFlow {
         }
         guard generation == mine, !Task.isCancelled else { return }
 
-        let progress = await progressProvider?()
-        guard generation == mine, !Task.isCancelled else { return }
         let request = AskRequest(question: question, jpeg: prepared.jpeg, showId: prepared.showId,
-                                 season: prepared.season, episode: prepared.episode, progress: progress,
+                                 season: prepared.season, episode: prepared.episode, progress: prepared.progress,
                                  mode: mode)
         do {
             let response = try await withDeadline(timeout) { [client] in try await client.ask(request) }

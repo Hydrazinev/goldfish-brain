@@ -44,6 +44,11 @@ enum ChromeParsers {
         matches(#"^https?://([a-z0-9-]+\.)?netflix\.com/watch/\d+"#, in: url, options: .caseInsensitive) != nil
     }
 
+    /// The `<digits>` of a Netflix `/watch/<digits>` URL, else nil.
+    static func watchId(url: String) -> String? {
+        matches(#"^https?://([a-z0-9-]+\.)?netflix\.com/watch/(\d+)"#, in: url, options: .caseInsensitive)?[2]
+    }
+
     /// "rc:S2E8" from the page's React context; "rc_models:…", "no_rc|…", "jserr|||…" and others give nil.
     static func parseReactContext(_ raw: String) -> Episode? {
         guard let m = matches(#"^rc:S(\d+)E(\d+)$"#, in: raw.trimmingCharacters(in: .whitespacesAndNewlines)),

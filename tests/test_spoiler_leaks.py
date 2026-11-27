@@ -43,7 +43,8 @@ def test_redact_bio_matches_unique_first_or_last_name_tokens_only():
     assert ask.redact_bio("Dating Jane", ["Jane Margolis"]) == ""
     assert ask.redact_bio("Mentor of margolis.", ["Jane Margolis"]) == ""
     assert ask.redact_bio("Janet is a friend", ["Jane Margolis"]) == "Janet is a friend"   # word boundary
-    assert ask.redact_bio("Friend of Ted", ["Ted Lee"]) == "Friend of Ted"                  # token < 4 letters
+    assert ask.redact_bio("Friend of Ted", ["Ted Lee"]) == ""                               # 3-letter first name now counts
+    assert ask.redact_bio("Friend of Al", ["Al Lee"]) == "Friend of Al"                     # 2 letters: too short
     # "White" is shared by two hidden characters, so the bare token proves nothing
     assert ask.redact_bio("Wife of Walter White", ["Skyler White", "Marie White"]) \
         == "Wife of Walter White"

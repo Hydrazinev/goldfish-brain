@@ -55,16 +55,17 @@ Measured on synthetic frames (cast photos pasted into 1920×1080 frames, the tes
 | Set | Correct | Wrong name | Not sure | False match on other-show faces |
 |---|---|---|---|---|
 | Easy (faces 120–400 px) | 100% | 0% | 0% | 0% of 1,380 |
-| Hard (35–110 px, blur, JPEG) | 78% | 0% | 22% | 0% of 5,080 |
+| Hard (35–110 px, blur, JPEG), of the 508 detected faces | 78% (396 of 508) | 0% | 22% | 0% of 5,080 |
+| Hard, counting all 570 frames (62 with no face found count as misses) | ≈69.5% (396 of 570) | 0% | 30.5% | n/a |
 
 The percentage on a card is a similarity score, labelled "match strength", not the probability of being right. Real-world accuracy is not yet measured: the app logs (locally, no images) each identification and the "Wrong?" / "Missed someone" buttons save frames so it can be.
 
 ## Known limits
 
 - Mac only; episode auto-detection is Netflix-in-Chrome only; small, dark or turned faces get missed.
-- Notes and Ask answers come from an AI model and can be wrong; Ask/React quality is not yet scored.
+- Notes and Ask answers come from an AI model and can be wrong; Ask and React got a small text-only sanity check (19 questions, one run), see [docs/EVAL_ASK.md](docs/EVAL_ASK.md): 19 of 19 judged correct, 0 spoiler leaks flagged; not a benchmark, and React and screenshots were not scored.
 - With player controls hidden the episode can't be read, so it falls back to the saved position.
-- Playback progress isn't passed on from the Mac app yet; the old Python Watch Buddy and `setup_show.py` are legacy.
+- Playback progress is read from the Netflix tab and passed on to Ask, React and the card, but only when it provably belongs to the screenshot (same Netflix title, episode read from Chrome); otherwise it is left out. The old Python Watch Buddy and `setup_show.py` are legacy.
 - Needs Xcode to build; no pre-built download.
 
 ## Privacy

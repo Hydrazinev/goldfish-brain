@@ -128,37 +128,37 @@ final class EpisodeResolverTests: XCTestCase {
         let chrome = FakeChrome(); chrome.reactContext = "rc:S2E8"
         let ocr = FakeOCR(); ocr.text = "S5:E5"
         let result = resolver(chrome, ocr).resolve(frame: frame)
-        XCTAssertEqual(result, ResolvedEpisode(season: 2, episode: 8, source: .chrome))
+        XCTAssertEqual(result, ResolvedEpisode(season: 2, episode: 8, source: .chrome, watchId: "1"))
         XCTAssertEqual(ocr.calls, 0, "no OCR when Chrome answered")
     }
 
     func testTitleTextIsUsedWhenTheReactContextHasNothing() {
         let chrome = FakeChrome(); chrome.reactContext = "rc_models:a,b"; chrome.titleParts = "Show|||S3:E4|||Name"
-        XCTAssertEqual(resolver(chrome, FakeOCR()).resolve(frame: frame), ResolvedEpisode(season: 3, episode: 4, source: .chrome, title: "Name"))
+        XCTAssertEqual(resolver(chrome, FakeOCR()).resolve(frame: frame), ResolvedEpisode(season: 3, episode: 4, source: .chrome, title: "Name", watchId: "1"))
     }
 
     func testChromeEpisodeWithoutSeasonTakesTheStoredSeason() {
         let chrome = FakeChrome(); chrome.reactContext = "no_rc|nkeys:x"; chrome.titleParts = "Breaking Bad|||E5|||Name"
         let result = resolver(chrome, FakeOCR(), stored: (4, 1)).resolve(frame: frame)
-        XCTAssertEqual(result, ResolvedEpisode(season: 4, episode: 5, source: .chrome, title: "Name", seasonKnown: false))
+        XCTAssertEqual(result, ResolvedEpisode(season: 4, episode: 5, source: .chrome, title: "Name", seasonKnown: false, watchId: "1"))
     }
 
     func testDomTitleGivesEpisodeAndTitleWithProvisionalSeasonWhenReactContextIsGone() {
         let chrome = FakeChrome(); chrome.reactContext = "no_rc|"; chrome.titleParts = "From|||E4|||A Rock and a Farway"
         let result = resolver(chrome, FakeOCR(), stored: (1, 1)).resolve(frame: frame)
-        XCTAssertEqual(result, ResolvedEpisode(season: 1, episode: 4, source: .chrome, title: "A Rock and a Farway", seasonKnown: false))
+        XCTAssertEqual(result, ResolvedEpisode(season: 1, episode: 4, source: .chrome, title: "A Rock and a Farway", seasonKnown: false, watchId: "1"))
     }
 
     func testPauseOverlayIsUsedWhenThePlayerTitleIsHidden() {
         let chrome = FakeChrome(); chrome.titleParts = "NO_TITLE_EL"; chrome.overlay = "Season 1|||A Rock and a Farway: Ep. 4"
         let result = resolver(chrome, FakeOCR(), stored: (3, 3)).resolve(frame: frame)
-        XCTAssertEqual(result, ResolvedEpisode(season: 1, episode: 4, source: .chrome, title: "A Rock and a Farway", seasonKnown: true))
+        XCTAssertEqual(result, ResolvedEpisode(season: 1, episode: 4, source: .chrome, title: "A Rock and a Farway", seasonKnown: true, watchId: "1"))
     }
 
     func testDomTitleWithSeasonIsKnown() {
         let chrome = FakeChrome(); chrome.titleParts = "Show|||S3:E4|||Name"
         let result = resolver(chrome, FakeOCR()).resolve(frame: frame)
-        XCTAssertEqual(result, ResolvedEpisode(season: 3, episode: 4, source: .chrome, title: "Name", seasonKnown: true))
+        XCTAssertEqual(result, ResolvedEpisode(season: 3, episode: 4, source: .chrome, title: "Name", seasonKnown: true, watchId: "1"))
     }
 
     func testReactContextResultHasKnownSeasonAndNoTitle() {

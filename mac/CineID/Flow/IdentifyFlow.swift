@@ -48,7 +48,7 @@ final class IdentifyFlow {
     private let seasonLookupTimeout: TimeInterval
     private let prefetchPhotos: ([String]) async -> Void
     /// How far through the episode the viewer is (0...1); nil when unknown. Must give up on its own quickly.
-    let progressProvider: (() async -> Double?)?
+    let progressProvider: (() async -> PlaybackReading?)?
     private var running = false
     private var requestedPermission = false
 
@@ -59,7 +59,7 @@ final class IdentifyFlow {
          timeout: TimeInterval = 30,
          seasonLookupTimeout: TimeInterval = 5,
          prefetchPhotos: @escaping ([String]) async -> Void = { _ in },
-         progressProvider: (() async -> Double?)? = nil) {
+         progressProvider: (() async -> PlaybackReading?)? = nil) {
         let created = now()
         self.engine = engine
         self.supervisor = supervisor
@@ -125,7 +125,7 @@ final class IdentifyFlow {
             storedPosition.set(season: state.current.season, episode: state.current.episode)
             sw.lap("engine state")
 
-            // Read the playback progress while the screen is captured (never adds noticeable time).
+            // Read the playback progress (and which title it belongs to) at the moment of capture.
             let progressTask = Task { await progressProvider?() }
             defer { progressTask.cancel() }
 
@@ -147,7 +147,7 @@ final class IdentifyFlow {
                 timeout: timeout, seasonLookupTimeout: seasonLookupTimeout)
             sw.lap("episode detect (\(episode.source))")
 
-            let progress = await progressTask.value
+            let progress = PlaybackProgress.attachable(await progressTask.value, to: episode)
             let response = try await withDeadline(timeout) { [engine] in
                 try await engine.identify(jpeg: jpeg, showId: showId, season: episode.season, episode: episode.episode,
                                           progress: progress)
