@@ -5,7 +5,8 @@ protocol EngineAPI {
     /// True only when the engine answers `/health` with 2xx. Never throws for a down engine.
     func health() async throws -> Bool
     func state() async throws -> EngineState
-    func identify(jpeg: Data, showId: String, season: Int, episode: Int) async throws -> IdentifyResponse
+    /// `progress` (0...1, how far through the episode) is sent only when known; nil keeps the conservative spoiler shield.
+    func identify(jpeg: Data, showId: String, season: Int, episode: Int, progress: Double?) async throws -> IdentifyResponse
     func setPosition(showId: String, season: Int, episode: Int) async throws
     /// Makes `showId` the show being watched (`POST /api/shows/select`).
     func selectShow(showId: String) async throws
@@ -13,6 +14,12 @@ protocol EngineAPI {
     func lookupSeason(showId: String, episode: Int, title: String) async throws -> Int?
     /// Reference photo bytes, or nil when the character has none (404).
     func photo(characterId: String) async throws -> Data?
+}
+
+extension EngineAPI {
+    func identify(jpeg: Data, showId: String, season: Int, episode: Int) async throws -> IdentifyResponse {
+        try await identify(jpeg: jpeg, showId: showId, season: season, episode: episode, progress: nil)
+    }
 }
 
 final class EngineClient: EngineAPI {
@@ -48,13 +55,14 @@ final class EngineClient: EngineAPI {
         try decode(EngineState.self, from: try await send(request("api/state")))
     }
 
-    func identify(jpeg: Data, showId: String, season: Int, episode: Int) async throws -> IdentifyResponse {
-        let body: [String: Any] = [
+    func identify(jpeg: Data, showId: String, season: Int, episode: Int, progress: Double?) async throws -> IdentifyResponse {
+        var body: [String: Any] = [
             "image": jpeg.base64EncodedString(),
             "show_id": showId,
             "season": season,
             "episode": episode,
         ]
+        if let progress { body["progress"] = progress }
         let req = try jsonPost("identify", body: body)
         return try decode(IdentifyResponse.self, from: try await send(req))
     }

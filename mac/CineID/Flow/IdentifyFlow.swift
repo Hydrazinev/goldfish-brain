@@ -47,8 +47,8 @@ final class IdentifyFlow {
     private let timeout: TimeInterval
     private let seasonLookupTimeout: TimeInterval
     private let prefetchPhotos: ([String]) async -> Void
-    /// Reserved for a later progress feature (how far through the episode the viewer is). Unused for now.
-    let progressProvider: (() -> Double?)?
+    /// How far through the episode the viewer is (0...1); nil when unknown. Must give up on its own quickly.
+    let progressProvider: (() async -> Double?)?
     private var running = false
     private var requestedPermission = false
 
@@ -59,7 +59,7 @@ final class IdentifyFlow {
          timeout: TimeInterval = 30,
          seasonLookupTimeout: TimeInterval = 5,
          prefetchPhotos: @escaping ([String]) async -> Void = { _ in },
-         progressProvider: (() -> Double?)? = nil) {
+         progressProvider: (() async -> Double?)? = nil) {
         let created = now()
         self.engine = engine
         self.supervisor = supervisor
@@ -125,6 +125,10 @@ final class IdentifyFlow {
             storedPosition.set(season: state.current.season, episode: state.current.episode)
             sw.lap("engine state")
 
+            // Read the playback progress while the screen is captured (never adds noticeable time).
+            let progressTask = Task { await progressProvider?() }
+            defer { progressTask.cancel() }
+
             let image = try await withDeadline(timeout) { [capture] in try await capture.capture() }
             sw.lap("screen capture")
             let prepared = await offMain { FrameCheck.prepare(image) }
@@ -143,8 +147,10 @@ final class IdentifyFlow {
                 timeout: timeout, seasonLookupTimeout: seasonLookupTimeout)
             sw.lap("episode detect (\(episode.source))")
 
+            let progress = await progressTask.value
             let response = try await withDeadline(timeout) { [engine] in
-                try await engine.identify(jpeg: jpeg, showId: showId, season: episode.season, episode: episode.episode)
+                try await engine.identify(jpeg: jpeg, showId: showId, season: episode.season, episode: episode.episode,
+                                          progress: progress)
             }
             sw.lap("engine identify")
             Diag.log("result: faces=\(response.totalFacesDetected) cards=\(response.characters.count) low=\(response.lowConfidence ?? false) hidden=\(response.hiddenBySpoilerShield ?? 0)")

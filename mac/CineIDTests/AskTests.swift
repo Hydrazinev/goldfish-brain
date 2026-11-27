@@ -313,7 +313,7 @@ private final class FakeEngine: EngineAPI {
                     current: .init(showId: showId, showName: "Breaking Bad", season: 4, episode: 4), shows: [], needsFirstRun: false,
                     shareOnlyWindow: shareOnlyWindow)
     }
-    func identify(jpeg: Data, showId: String, season: Int, episode: Int) async throws -> IdentifyResponse { fatalError() }
+    func identify(jpeg: Data, showId: String, season: Int, episode: Int, progress: Double?) async throws -> IdentifyResponse { fatalError() }
     func setPosition(showId: String, season: Int, episode: Int) async throws {}
     func selectShow(showId: String) async throws {}
     func lookupSeason(showId: String, episode: Int, title: String) async throws -> Int? { nil }
@@ -382,6 +382,16 @@ final class AskFlowTests: XCTestCase {
 
     private func isAnswer() -> Bool { if case .answer = model.phase { return true } else { return false } }
     private func isMessage() -> Bool { if case .message = model.phase { return true } else { return false } }
+
+    func testProgressFromTheProviderIsSentWithTheQuestion() async {
+        let withProgress = AskFlow(client: client, engine: engine, supervisor: status, capture: capture,
+                                   resolver: FakeResolver(), model: model, timeout: 2, progressProvider: { 0.95 })
+        withProgress.hotKeyPressed()
+        model.draft = "Who?"
+        withProgress.submit()
+        await settle { self.isAnswer() }
+        XCTAssertEqual(client.requests.first?.progress, 0.95)
+    }
 
     func testHotkeyOpensTheFieldAndCapturesInTheBackgroundBeforeAnyQuestion() async {
         flow.hotKeyPressed()

@@ -35,6 +35,7 @@ No Accessibility permission is needed for the hotkey.
    "graphics acceleration" message appears instead of a wrong answer.
 8. Press ⌘⇧X twice quickly: one popup, one request. Stop the engine (`pkill -f src/server.py`): it restarts itself.
 9. Start the Python app first, then the Mac app: the menu's first line and the ⌘⇧X popup say port 8000 is in use.
+10. Playback progress: with a Netflix video playing near its end (90%+), ⌘⇧X (and ⌘⇧E / ⌘⇧R) should show end-of-episode notes; earlier in the episode they stay on the start-of-episode notes. With two Chrome copies running, the menu's first line says to quit the extra one.
 10. Menu: Open Goldfish Brain…, Add a Show… (paste an API key with ⌘V), Switch show; Quit leaves no `src/server.py` running.
 
 ## Shortcuts

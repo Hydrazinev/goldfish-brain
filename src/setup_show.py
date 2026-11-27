@@ -231,17 +231,14 @@ def main() -> None:
     _report_completeness(show_id)
 
     # Step 3 — update config.json
-    cfg: dict = {}
-    if _CFG.exists():
-        try:
-            cfg = json.loads(_CFG.read_text())
-        except Exception:
-            pass
-    cfg["show_id"] = show_id
-    cfg["season"]  = 1
-    cfg["episode"] = 1
-    _CFG.parent.mkdir(parents=True, exist_ok=True)
-    _CFG.write_text(json.dumps(cfg, indent=2))
+    import config_store
+    try:
+        config_store.update_config(
+            _CFG, lambda cfg: cfg.update({"show_id": show_id, "season": 1, "episode": 1}))
+    except config_store.ConfigUnreadable:
+        print(f"[setup] !  {_CFG} is unreadable, so it was left untouched. "
+              f"Fix or delete it, then select {show_id!r} in the app.")
+        return
     print(f"[setup] ✓  config.json updated  →  show_id={show_id!r}  S01E01")
 
     print(f"\n{'═'*60}")

@@ -64,6 +64,7 @@ final class AppEnvironment {
     private var askHotKeyProblem: String?
     private var reactHotKeyProblem: String?
     private var stopped = false
+    private let chromeCheck = ChromeInstanceCheck()
 
     /// Open the Goldfish Brain window (library / add a show / settings).
     func openUI(route: String = "") {
@@ -127,18 +128,21 @@ final class AppEnvironment {
                                        pidFile: Self.pidFile)
             supervisor = sup
             let stored = StoredPosition()
+            let progressChrome = AppleScriptChrome()   // its own AppleScript queue: never waits behind episode detection
             flow = IdentifyFlow(engine: engine, supervisor: sup, capture: ScreenCaptureKitCapture(),
                                 resolver: EpisodeResolver(chrome: AppleScriptChrome(), ocr: VisionOCR(),
                                                           stored: { stored.get() }),
                                 model: model, storedPosition: stored,
                                 serverStartedAt: { [startTracker] in startTracker.date },
-                                prefetchPhotos: { await photos.prefetch($0) })
+                                prefetchPhotos: { await photos.prefetch($0) },
+                                progressProvider: { await PlaybackProgress.read(from: progressChrome) })
             let capture = ScreenCaptureKitCapture()
             askFlow = AskFlow(client: AskClient(), engine: engine, supervisor: sup, capture: capture,
                               resolver: EpisodeResolver(chrome: AppleScriptChrome(), ocr: VisionOCR(),
                                                         stored: { stored.get() }),
                               model: askModel, storedPosition: stored,
-                              serverStartedAt: { [startTracker] in startTracker.date })
+                              serverStartedAt: { [startTracker] in startTracker.date },
+                              progressProvider: { await PlaybackProgress.read(from: progressChrome) })
         } else {
             startupProblem = "Goldfish Brain can't find its engine. Rebuild the app with scripts/run-mac.sh."
         }
@@ -227,6 +231,7 @@ final class AppEnvironment {
         case .ignore: return
         case .dismiss: model.dismiss()
         case .start:
+            _ = chromeCheck.hasMultiple()   // logs when several Chromes run
             if let startupProblem { return model.notice(startupProblem) }
             dismissAsk()   // one card at a time
             guard let flow else { return }
@@ -278,7 +283,8 @@ final class AppEnvironment {
 
     private func menuModel() -> StatusMenuModel {
         StatusMenuModel(status: supervisor?.status ?? .stopped, supervisorMessage: supervisor?.userMessage,
-                        state: engineState, problem: startupProblem ?? hotKeyProblem ?? askHotKeyProblem ?? reactHotKeyProblem)
+                        state: engineState, problem: startupProblem ?? hotKeyProblem ?? askHotKeyProblem ?? reactHotKeyProblem,
+                        chromeNote: chromeCheck.hasMultiple() ? ChromeInstanceCheck.note : nil)
     }
 
     private func refreshMenu() { statusMenu?.update(menuModel()) }

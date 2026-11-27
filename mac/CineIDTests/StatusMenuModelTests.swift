@@ -30,6 +30,13 @@ final class StatusMenuModelTests: XCTestCase {
         XCTAssertEqual(line(.portInUse, message: "Port busy."), "Port busy.")
     }
 
+    func testChromeNoteReplacesReadyButNeverAnEngineProblem() {
+        let note = "More than one Chrome is running — episode detection may be wrong. Quit the extra copy."
+        XCTAssertEqual(StatusMenuModel(status: .ready, supervisorMessage: nil, state: nil, chromeNote: note).firstLine, note)
+        XCTAssertEqual(StatusMenuModel(status: .failed, supervisorMessage: nil, state: nil, chromeNote: note).firstLine,
+                       "Engine not responding")
+    }
+
     func testFirstLineIncludesShowAndStamp() {
         let s = state(shows: [("bb", "Breaking Bad")], current: ("bb", 4, 4))
         XCTAssertEqual(StatusMenuModel(status: .ready, supervisorMessage: nil, state: s).firstLine,

@@ -8,14 +8,16 @@ private final class FakeEngine: EngineAPI {
     var stateResult: Result<EngineState, Error> = .success(makeState())
     var identifyHandler: () async throws -> IdentifyResponse = { identifyResponse([card()]) }
     private(set) var identifyCalls = 0
+    private(set) var identifyProgress: Double?
     private(set) var identifyArgs: (show: String, season: Int, episode: Int)?
     private(set) var setPositionCalls: [(show: String, season: Int, episode: Int)] = []
 
     func health() async throws -> Bool { true }
     func state() async throws -> EngineState { try stateResult.get() }
-    func identify(jpeg: Data, showId: String, season: Int, episode: Int) async throws -> IdentifyResponse {
+    func identify(jpeg: Data, showId: String, season: Int, episode: Int, progress: Double?) async throws -> IdentifyResponse {
         identifyCalls += 1
         identifyArgs = (showId, season, episode)
+        identifyProgress = progress
         return try await identifyHandler()
     }
     func setPosition(showId: String, season: Int, episode: Int) async throws {
@@ -114,6 +116,22 @@ final class IdentifyFlowTests: XCTestCase {
 
     private func failure(_ f: FlowFailure, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertEqual(model.phase, .message(.failure(f)), file: file, line: line)
+    }
+
+    func testProgressIsSentToTheEngine() async {
+        let flow = IdentifyFlow(engine: engine, supervisor: status, capture: capture, resolver: resolver, model: model,
+                                timeout: 5, progressProvider: { 0.93 })
+        await flow.trigger()
+        XCTAssertEqual(engine.identifyProgress, 0.93)
+    }
+
+    func testNoProviderOrUnknownProgressSendsNil() async {
+        await makeFlow().trigger()
+        XCTAssertNil(engine.identifyProgress)
+        let flow = IdentifyFlow(engine: engine, supervisor: status, capture: capture, resolver: resolver, model: model,
+                                timeout: 5, progressProvider: { nil })
+        await flow.trigger()
+        XCTAssertNil(engine.identifyProgress)
     }
 
     func testSuccessShowsCardsWithTheRealPosition() async {

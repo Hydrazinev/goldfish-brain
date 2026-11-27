@@ -93,6 +93,16 @@ final class EngineClientTests: XCTestCase {
 
     // MARK: decoding
 
+    func testIdentifySendsProgressOnlyWhenKnown() async throws {
+        respond(200, fullBody)
+        _ = try await client.identify(jpeg: Data([1]), showId: "bb", season: 1, episode: 1)
+        var obj = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(StubURLProtocol.lastBody)) as? [String: Any])
+        XCTAssertNil(obj["progress"])
+        _ = try await client.identify(jpeg: Data([1]), showId: "bb", season: 1, episode: 1, progress: 0.95)
+        obj = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(StubURLProtocol.lastBody)) as? [String: Any])
+        XCTAssertEqual(obj["progress"] as? Double, 0.95)
+    }
+
     func testIdentifyDecodesFullSuccessBody() async throws {
         respond(200, fullBody)
         let r = try await client.identify(jpeg: Data([1, 2, 3]), showId: "breaking-bad", season: 3, episode: 7)

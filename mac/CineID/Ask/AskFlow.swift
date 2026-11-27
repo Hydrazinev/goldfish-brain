@@ -29,7 +29,7 @@ final class AskFlow {
     private let timeout: TimeInterval
     private let seasonLookupTimeout: TimeInterval
     private let serverStartedAt: () -> Date
-    private let progressProvider: (() -> Double?)?
+    private let progressProvider: (() async -> Double?)?
     private var prep: Task<Prep, Never>?
     private var asking: Task<Void, Never>?
     private var generation = 0
@@ -38,7 +38,7 @@ final class AskFlow {
     init(client: AskAPI, engine: EngineAPI, supervisor: StatusProviding, capture: ScreenCapturing,
          resolver: EpisodeResolving, model: AskModel, storedPosition: StoredPosition = StoredPosition(),
          serverStartedAt: @escaping () -> Date = Date.init, timeout: TimeInterval = AskClient.timeout,
-         seasonLookupTimeout: TimeInterval = 5, progressProvider: (() -> Double?)? = nil) {
+         seasonLookupTimeout: TimeInterval = 5, progressProvider: (() async -> Double?)? = nil) {
         self.client = client
         self.engine = engine
         self.supervisor = supervisor
@@ -164,8 +164,10 @@ final class AskFlow {
         }
         guard generation == mine, !Task.isCancelled else { return }
 
+        let progress = await progressProvider?()
+        guard generation == mine, !Task.isCancelled else { return }
         let request = AskRequest(question: question, jpeg: prepared.jpeg, showId: prepared.showId,
-                                 season: prepared.season, episode: prepared.episode, progress: progressProvider?(),
+                                 season: prepared.season, episode: prepared.episode, progress: progress,
                                  mode: mode)
         do {
             let response = try await withDeadline(timeout) { [client] in try await client.ask(request) }

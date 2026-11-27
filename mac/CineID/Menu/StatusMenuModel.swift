@@ -14,6 +14,8 @@ struct StatusMenuModel: Equatable {
     var state: EngineState?
     /// A problem found at launch (engine not found, hotkey taken): replaces the status line.
     var problem: String? = nil
+    /// More than one Chrome is running: shown instead of "Ready…" (never hides a real engine problem).
+    var chromeNote: String? = nil
 
     /// `S02E08`
     static func stamp(season: Int, episode: Int) -> String { ViewingPosition.code(season, episode) }
@@ -27,7 +29,9 @@ struct StatusMenuModel: Equatable {
         if let problem { return problem }
         let base: String
         switch status {
-        case .ready: base = "Ready"
+        case .ready:
+            if let chromeNote { return chromeNote }
+            base = "Ready"
         case .starting, .warmingUp: base = "Warming up…"
         case .crashed: base = "Restarting…"
         case .failed: base = "Engine not responding"
