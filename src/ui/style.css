@@ -213,3 +213,10 @@ img.avatar, .avatar { border-radius: 2px; object-fit: cover; box-shadow: 0 0 0 4
 .eval-face-list button[aria-pressed=true] { outline:2px solid var(--stamp); }
 .eval-face-list + .stack input[type=number] { width:100px; }
 nav { flex-wrap:wrap; }
+
+/* evaluation: one-click character picker */
+.pick-grid{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.pick{display:flex;flex-direction:column;align-items:center;gap:4px;width:92px;padding:6px 4px;border:1px solid var(--line,#999);border-radius:10px;background:#fffaf0;font-size:12px;cursor:pointer}
+.pick img{width:56px;height:56px;border-radius:50%;object-fit:cover;background:#ddd}
+.pick[aria-pressed="true"]{outline:3px solid #1F3FB0;background:#e8edff}
+.pick.special{width:auto;flex-direction:row;padding:8px 12px}

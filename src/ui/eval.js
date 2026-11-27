@@ -74,7 +74,11 @@ async function viewEval() {
     ['Left','Top','Right','Bottom'].forEach((name,i)=>{const input=h('input',{type:'number',min:0,max:i%2?info.height:info.width,value:Math.round(face.bbox[i]),'aria-label':`${name} coordinate`});input.addEventListener('change',()=>{face.bbox[i]=Number(input.value);changed();});coords.append(h('label',{class:'field'},name,input));});
     const tags=h('div',{class:'row wrap'});
     ['dark','profile','small','occluded'].forEach(tag=>{const input=h('input',{type:'checkbox',checked:(face.tags||[]).includes(tag),'aria-label':tag});input.addEventListener('change',()=>{face.tags=input.checked?[...new Set([...(face.tags||[]),tag])]:(face.tags||[]).filter(t=>t!==tag);changed();});tags.append(h('label',{class:'check'},input,tag));});
-    editor.append(h('h3',{text:`Face ${selected+1}`}),identity,coords,tags);
+    // One-click picker: a photo for every character, then the special answers.
+    const pick=value=>{face.identity=value;identity.value=value;changed();const next=faces.findIndex((f,i)=>i!==selected&&!f.identity);if(next>=0)selected=next;drawEditor();};
+    const grid=h('div',{class:'pick-grid',role:'group','aria-label':'Click who this face is'},...(info.choices||[]).map(c=>h('button',{type:'button',class:'pick','aria-pressed':String(face.identity===c.id),title:c.name,onclick:()=>pick(c.id)},h('img',{src:`/api/characters/${encodeURIComponent(c.id)}/photo`,alt:'',loading:'lazy',width:56,height:56}),h('span',{text:c.name}))));
+    const specials=h('div',{class:'pick-grid specials'},...[['extra','Extra / not cast'],['not_in_gallery','Cast, no photos'],['cant_determine','Not sure'],['false_detection','Not a face']].map(([v,t])=>h('button',{type:'button',class:'pick special','aria-pressed':String(face.identity===v),onclick:()=>pick(v)},t)));
+    editor.append(h('h3',{text:`Face ${selected+1}: click who it is`}),grid,specials,h('details',{},h('summary',{text:'Use the list instead'}),identity),coords,tags);
   };
   const addBox=box=>{faces.push({bbox:box,identity:'',tags:[]});selected=faces.length-1;noFaces.checked=false;drawEditor();changed();};
   const point=e=>{const r=canvas.getBoundingClientRect();return[Math.max(0,Math.min(canvas.width,(e.clientX-r.left)*canvas.width/r.width)),Math.max(0,Math.min(canvas.height,(e.clientY-r.top)*canvas.height/r.height))];};
