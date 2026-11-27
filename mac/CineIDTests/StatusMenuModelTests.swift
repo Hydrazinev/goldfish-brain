@@ -12,6 +12,15 @@ final class StatusMenuModelTests: XCTestCase {
                     needsFirstRun: false)
     }
 
+    func testEvaluationWarningAppearsOnlyWhenEnabled() {
+        var s = state(shows: [], current: nil)
+        XCTAssertNil(StatusMenuModel(status: .ready, supervisorMessage: nil, state: s).evaluationLine)
+        s.evalMode = true
+        let m = StatusMenuModel(status: .ready, supervisorMessage: nil, state: s)
+        XCTAssertEqual(m.evaluationLine, "Evaluation mode ON — entire display saved locally")
+        XCTAssertTrue(m.topLevelTitles.contains(m.evaluationLine!))
+    }
+
     func testStampFormatting() {
         XCTAssertEqual(StatusMenuModel.stamp(season: 2, episode: 8), "S02E08")
         XCTAssertEqual(StatusMenuModel.stamp(season: 12, episode: 104), "S12E104")

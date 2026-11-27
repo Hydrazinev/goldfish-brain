@@ -206,3 +206,10 @@ img.avatar, .avatar { border-radius: 2px; object-fit: cover; box-shadow: 0 0 0 4
 .map-empty .serif-lg { font: 700 20px var(--serif); margin-bottom: 6px; }
 @media (max-width: 520px) { .map-link { margin-left: 0; } .map-card { padding: 8px; } .map-label { font-size: 9px; } .map-name { font-size: 10px; } }
 @media (prefers-reduced-motion: reduce) { .map-edge, .map-node, .map-label { transition: none; } }
+
+/* Evaluation annotations use source-image pixels, scaled only for display. */
+.eval-canvas { width:100%; height:auto; display:block; background:#20231f; border:1px solid var(--rule); touch-action:none; cursor:crosshair; }
+.eval-face-list { display:grid; gap:8px; }
+.eval-face-list button[aria-pressed=true] { outline:2px solid var(--stamp); }
+.eval-face-list + .stack input[type=number] { width:100px; }
+nav { flex-wrap:wrap; }

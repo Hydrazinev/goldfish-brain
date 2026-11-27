@@ -45,6 +45,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         let first = NSMenuItem(title: model.firstLine, action: nil, keyEquivalent: "")
         first.isEnabled = false
         menu.addItem(first)
+        if let line = model.evaluationLine {
+            let evaluation = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+            evaluation.isEnabled = false
+            menu.addItem(evaluation)
+        }
         menu.addItem(.separator())
         menu.addItem(shortcut(StatusMenuModel.identifyTitle, #selector(identify), key: "x"))
         menu.addItem(shortcut(StatusMenuModel.askTitle, #selector(ask), key: "e"))

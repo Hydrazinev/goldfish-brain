@@ -64,6 +64,8 @@ struct EngineState: Decodable, Equatable {
     let current: CurrentShow
     let shows: [Show]
     let needsFirstRun: Bool
+    /// Opt-in local storage of complete Identify display captures. Nil means disabled.
+    var evalMode: Bool? = nil
     /// Settings → Watch Buddy "share only my Chrome window"; nil (older engine) means yes.
     var shareOnlyWindow: Bool? = nil
 }

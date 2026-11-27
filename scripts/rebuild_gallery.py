@@ -28,11 +28,15 @@ def _cos(a, b) -> float:
     return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
 
 
-def rebuild(show_dir: Path, recogniser, index_cls, apply: bool, copies: int = gallery_aug.COPIES, out=print) -> dict:
+def rebuild(show_dir: Path, recogniser, index_cls, apply: bool, copies: int = gallery_aug.COPIES, out=print, out_dir=None, mode="augmented") -> dict:
     """Plan (and with apply=True, write) a new index for show_dir. Returns a summary dict."""
     index_path = show_dir / "embeddings.faiss"
     if not index_path.exists():
         raise SystemExit(f"No index at {index_path}")
+    destination = Path(out_dir) if out_dir is not None else None
+    if destination is not None:
+        if destination.resolve() == show_dir.resolve() or destination.exists():
+            raise ValueError('--out must be a new directory outside the active show gallery')
     old = index_cls()
     old.load(index_path)
     new = index_cls()
@@ -40,7 +44,7 @@ def rebuild(show_dir: Path, recogniser, index_cls, apply: bool, copies: int = ga
     for cid in old._ids:
         vec_old = old._index.reconstruct(old._ids.index(cid))
         photos = sorted(p for p in (show_dir / "raw" / cid).glob("*.[jp][pn]*g")) if (show_dir / "raw" / cid).is_dir() else []
-        gallery = gallery_aug.build_gallery(recogniser, photos, copies) if photos else None
+        gallery = (recogniser.build_gallery(photos) if mode == "clean" else gallery_aug.build_gallery(recogniser, photos, copies)) if photos else None
         if gallery is None:
             new.add_character(cid, vec_old)
             kept += 1
@@ -50,15 +54,22 @@ def rebuild(show_dir: Path, recogniser, index_cls, apply: bool, copies: int = ga
         changed += 1
         out(f"  {cid}: {gallery[1]} clean photos + up to {gallery[1] * copies} degraded copies; similarity old vs new {_cos(vec_old, gallery[0]):.3f}")
     summary = {"changed": changed, "kept": kept, "applied": False}
-    if not apply:
+    if not apply and destination is None:
         out(f"\nDry run: {changed} character(s) would change, {kept} keep their vector. Nothing was written. Use --apply.")
         return summary
+    if destination is not None:
+        destination.mkdir(parents=True)
+        index_path = destination / 'embeddings.faiss'
     for suffix in (".faiss", ".meta"):
         src = index_path.with_suffix(suffix)
         if src.exists():
             shutil.copy2(src, src.with_name(src.name + ".bak"))
     new.save(index_path)
-    (index_path.parent / "gallery_aug.flag").write_text("1")   # calibration was fitted on the clean gallery
+    flag = index_path.parent / "gallery_aug.flag"
+    if (mode == "augmented" and gallery_aug.enabled() and copies > 0) or (kept and (show_dir / "gallery_aug.flag").exists()):
+        flag.write_text("1")   # Never apply clean-gallery calibration to mixed / augmented vectors.
+    else:
+        flag.unlink(missing_ok=True)
     summary["applied"] = True
     out(f"\nWrote {index_path} (backup: {index_path.name}.bak). Restart the app to load it.")
     return summary
@@ -69,9 +80,11 @@ def main() -> None:
     ap.add_argument("--show", required=True)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--copies", type=int, default=gallery_aug.COPIES)
+    ap.add_argument("--out", type=Path, help="Write an alternative gallery to a NEW directory; active index is unchanged")
+    ap.add_argument("--mode", choices=["clean", "augmented"], default="augmented")
     a = ap.parse_args()
     from recogniser import FaceIndex, FaceRecogniser
-    rebuild(ROOT / "data" / "shows" / a.show, FaceRecogniser(), FaceIndex, a.apply, a.copies)
+    rebuild(ROOT / "data" / "shows" / a.show, FaceRecogniser(), FaceIndex, a.apply, a.copies, out_dir=a.out, mode=a.mode)
 
 
 if __name__ == "__main__":

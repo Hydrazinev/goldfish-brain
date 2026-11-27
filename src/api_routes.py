@@ -55,6 +55,7 @@ class ApiDeps:
     permissions: Callable[[], dict]
     open_target: Optional[Callable[[str], None]] = None   # defaults to macOS `open`
     data_dir: Optional[Path] = None                        # for character photos
+    eval_data_dir: Optional[Callable] = None  # live engine data root (redirected by tests)
     make_llm: Optional[Callable[[str], object]] = None     # api_key -> Claude client (tests inject)
     episode_guide: Optional[Callable[[int, str], list]] = None   # (tmdb_id, key) -> episodes
 
@@ -264,6 +265,7 @@ def build_router(deps: ApiDeps) -> APIRouter:
                 current = {k: item[k] for k in ("show_id", "show_name", "season", "episode")}
         tmdb, claude = bool(key("TMDB_API_KEY")), bool(key("ANTHROPIC_API_KEY"))
         return {
+            "eval_mode": cfg.get("eval_mode") is True,
             "setup": {"tmdb_key": tmdb, "anthropic_key": claude},
             # The probe takes a real screenshot (~1 s): only when asked, never on the hotkey path.
             "permissions": deps.permissions() if permissions else {"screen_recording": None},
@@ -701,6 +703,8 @@ def build_router(deps: ApiDeps) -> APIRouter:
     def permissions():
         return deps.permissions()
 
+    from eval_routes import install_eval_routes
+    install_eval_routes(r, deps, _hidden_visible)
     return r
 
 

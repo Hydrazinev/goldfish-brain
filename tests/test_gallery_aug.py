@@ -95,3 +95,20 @@ def test_rebuild_is_a_dry_run_unless_apply(tmp_path):
     assert new._ids == ["c1", "c2"]
     top = new.search(E(1), top_k=2)
     assert top[0][0] == "c1" and top[0][1] > 0.3            # c1 now also resembles the degraded embedding
+
+
+def test_alternative_gallery_never_changes_the_active_index(tmp_path):
+    show = tmp_path / 'active'
+    _write(show, 3, 'c1')
+    idx = FaceIndex(); idx.add_character('c1', E(0)); idx.save(show / 'embeddings.faiss')
+    before = (show / 'embeddings.faiss').read_bytes()
+    target = tmp_path / 'alternatives' / 'show'
+    result = rebuild_gallery.rebuild(show, FakeRecogniser(), FaceIndex, False,
+                                    out_dir=target, mode='clean', out=lambda *a: None)
+    assert result['applied']
+    assert (target / 'embeddings.faiss').exists()
+    assert not (target / 'gallery_aug.flag').exists()
+    assert (show / 'embeddings.faiss').read_bytes() == before
+    import pytest
+    with pytest.raises(ValueError):
+        rebuild_gallery.rebuild(show, FakeRecogniser(), FaceIndex, False, out_dir=show)

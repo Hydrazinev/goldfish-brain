@@ -60,6 +60,8 @@ Measured on synthetic frames (cast photos pasted into 1920×1080 frames, the tes
 
 The percentage on a card is a similarity score, labelled "match strength", not the probability of being right. Real-world accuracy is not yet measured: the app logs (locally, no images) each identification and the "Wrong?" / "Missed someone" buttons save frames so it can be.
 
+Real-frame collection and labelling: [local evaluation workflow](docs/REAL_FRAME_EVALUATION.md). Evaluation is opt-in and saves entire-display captures locally.
+
 ## Known limits
 
 - Mac only; episode auto-detection is Netflix-in-Chrome only; small, dark or turned faces get missed.

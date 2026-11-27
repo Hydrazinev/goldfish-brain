@@ -82,14 +82,14 @@ async function render() {
   }
   let name = routeName();
   // Without a TMDB key nothing else works, so first-run is the only page.
-  if (!S.setup.tmdb_key && name !== "welcome") { location.hash = "#/welcome"; return; }
+  if (!S.setup.tmdb_key && name !== "welcome" && name !== "eval") { location.hash = "#/welcome"; return; }
   if (!name) name = S.shows.length ? "library" : "add";
   topbar.classList.toggle("hide-nav", name === "welcome");
   document.querySelectorAll("nav a").forEach(a => {
     if (a.dataset.route === (name === "map" ? "library" : name)) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  const view = { welcome: viewWelcome, library: viewLibrary, add: viewAdd, settings: viewSettings, map: viewMap }[name] || viewLibrary;
+  const view = { welcome: viewWelcome, library: viewLibrary, add: viewAdd, settings: viewSettings, eval: viewEval, map: viewMap }[name] || viewLibrary;
   view();
 }
 window.addEventListener("hashchange", render);
@@ -619,7 +619,7 @@ async function viewSettings() {
   drawKeys();
   const perm = (await api("/permissions")).data;
   app.replaceChildren(h("div", { class: "stack" }, h("h1", { text: "Settings" }),
-    keysHost,
+    keysHost, evalSettingsCard(),
     h("div", { class: "card stack" }, h("h2", { text: "Permissions" }),
       h("div", { class: "row spread" }, h("div", {}, h("strong", { text: "Screen Recording" }), h("div", { class: "help", text: "Needed to identify characters. After turning it on, quit and reopen Goldfish Brain." })),
         perm.screen_recording === true ? h("span", { class: "pill ok", text: "✓ Allowed" })

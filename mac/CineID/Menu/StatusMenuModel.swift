@@ -55,5 +55,9 @@ struct StatusMenuModel: Equatable {
     static let askTitle = "Ask a question"
     static let reactTitle = "React to this scene"
 
-    var topLevelTitles: [String] { [firstLine, Self.identifyTitle, Self.askTitle, Self.reactTitle, "Open Goldfish Brain…", "Add a Show…", switchShowTitle, "Quit Goldfish Brain"] }
+    var evaluationLine: String? {
+        state?.evalMode == true ? "Evaluation mode ON — entire display saved locally" : nil
+    }
+
+    var topLevelTitles: [String] { [firstLine] + (evaluationLine.map { [$0] } ?? []) + [ Self.identifyTitle, Self.askTitle, Self.reactTitle, "Open Goldfish Brain…", "Add a Show…", switchShowTitle, "Quit Goldfish Brain"] }
 }

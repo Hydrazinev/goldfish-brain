@@ -20,6 +20,9 @@ from recogniser import FaceRecogniser, FaceIndex
 from database import CharacterDB
 import accuracy
 import calibration
+import config_store
+import eval_store
+import match_policy
 import actor_credits
 import api_routes
 import key_check
@@ -171,7 +174,7 @@ api_routes.install(app, api_routes.ApiDeps(
     get_db=lambda: db, keystore=keystore, key_check=key_check,
     runner=_runner, tmdb_get=api_routes.default_tmdb_get,
     permissions=api_routes.cached(api_routes.default_permissions, ttl=10),
-    data_dir=_DATA_DIR,
+    data_dir=_DATA_DIR, eval_data_dir=lambda: _DATA_DIR,
 ))
 
 if _UI_DIR.exists():
@@ -291,23 +294,7 @@ def _dedupe_and_rank(results: list[dict]) -> list[dict]:
     return sorted(best.values(), key=lambda r: r["confidence"], reverse=True)
 
 
-def _assign_one_to_one(candidates: list[list[tuple[str, float]]]
-                       ) -> list[Optional[tuple[str, float]]]:
-    """candidates[i] = face i's (character_id, score) hits at/above threshold,
-    best first. Returns one (character_id, score) or None per face, with each
-    character claimed by at most one face. Highest scores are settled first, so
-    a weaker face whose best match was taken falls back to its next-best hit
-    instead of vanishing (two faces used to collapse onto one character)."""
-    pairs = sorted(
-        ((score, i, cid) for i, hits in enumerate(candidates) for cid, score in hits),
-        key=lambda p: p[0], reverse=True)
-    out: list[Optional[tuple[str, float]]] = [None] * len(candidates)
-    taken: set[str] = set()
-    for score, i, cid in pairs:
-        if out[i] is None and cid not in taken:
-            out[i] = (cid, score)
-            taken.add(cid)
-    return out
+_assign_one_to_one = match_policy.assign_one_to_one
 
 
 def _build_character_result(char: dict, confidence: float,
@@ -376,7 +363,12 @@ def identify(req: IdentifyRequest):
 
     face_hits: list[list[tuple[str, float]]] = []
     face_log: list[dict] = []
-    for _crop, _bbox, face in face_detections:
+    eval_faces, face_indices = [], []
+    for detection_i, (_crop, _bbox, face) in enumerate(face_detections):
+        eval_faces.append({"bbox": [float(v) for v in _bbox] if _bbox is not None else None,
+                           "detector_confidence": float(getattr(face, "det_score", 1.0)),
+                           "candidates": [], "eligible": False, "assigned_character_id": None,
+                           "displayed_character_id": None})
         if getattr(face, "det_score", 1.0) < _MIN_DET_SCORE:
             continue
         embedding = recogniser.get_embedding(image, face)
@@ -391,9 +383,10 @@ def identify(req: IdentifyRequest):
         top1 = matches[0][1] if matches else 0.0
         top2 = matches[1][1] if len(matches) > 1 else 0.0
         margin = top1 - top2
-        hits = [(cid, score) for cid, score in matches if score >= _SIMILARITY_THRESHOLD]
-        if margin < _MIN_MARGIN:
-            hits = []
+        hits = match_policy.candidates(matches, _SIMILARITY_THRESHOLD, _MIN_MARGIN)
+        eval_faces[detection_i].update(candidates=[{"character_id": cid, "score": float(score)} for cid, score in matches],
+                                       eligible=True)
+        face_indices.append(detection_i)
         face_hits.append(hits)
         face_log.append({"score": round(float(top1), 4), "margin": round(float(margin), 4),
                          "p_correct": None if _aug_gallery else calibration.calibrated_confidence(top1, margin),
@@ -406,6 +399,9 @@ def identify(req: IdentifyRequest):
             continue
         character_id, confidence = assigned
         face_log[face_i]["character_id"] = character_id
+        if eval_faces[face_indices[face_i]]["candidates"] and eval_faces[face_indices[face_i]]["candidates"][0]["character_id"] == character_id:
+            eval_faces[face_indices[face_i]]["calibrated_confidence"] = face_log[face_i]["p_correct"]
+        eval_faces[face_indices[face_i]]["assigned_character_id"] = character_id
         char = db.get_character(character_id)
         if char is None:
             continue
@@ -416,6 +412,7 @@ def identify(req: IdentifyRequest):
         if visibility == "hidden":
             hidden_by_shield += 1
             continue
+        eval_faces[face_indices[face_i]]["displayed_character_id"] = character_id
         if visibility == "limited":
             limited = _limited_result(char, confidence)
             limited["also_in"] = also_in
@@ -437,30 +434,31 @@ def identify(req: IdentifyRequest):
     accuracy.log_faces(_DATA_DIR, face_log, show_id=req.show_id,
                        season=req.season, episode=req.episode)
 
-    # A recognised character was withheld to avoid spoilers: say so, instead
-    # of the misleading "face not recognised".
+    response = {"characters": characters, "total_faces_detected": total_faces, "show_id": req.show_id}
     if not characters and hidden_by_shield:
-        return {
-            "characters": [],
-            "hidden_by_spoiler_shield": hidden_by_shield,
-            "total_faces_detected": total_faces,
-            "show_id": req.show_id,
-        }
+        response["hidden_by_spoiler_shield"] = hidden_by_shield
+    elif any_face_attempted and not characters:
+        response["low_confidence"] = True
 
-    # All faces were attempted but none crossed the confidence threshold
-    if any_face_attempted and not characters:
-        return {
-            "characters": [],
-            "low_confidence": True,
-            "total_faces_detected": total_faces,
-            "show_id": req.show_id,
-        }
-
-    return {
-        "characters": characters,
-        "total_faces_detected": total_faces,
-        "show_id": req.show_id,
-    }
+    # This is a separate local corpus, never a source for feedback or outgoing image requests.
+    # Failures here must not change an already-built recognition response.
+    try:
+        if config_store.read_config(_CONFIG_PATH).get("eval_mode") is True:
+            eval_store.save_capture(_DATA_DIR, _CONFIG_PATH, base64.b64decode(req.image),
+                image.shape[1], image.shape[0], {
+                    "show_id": req.show_id, "season": req.season, "episode": req.episode, "progress": req.progress,
+                    "capture_scope": "whole_display", "faces": eval_faces, "response": response,
+                    "visible_character_ids": [c["character_id"] for c in db.get_show_characters(req.show_id)
+                        if _visibility(c, req.season, req.episode, _pick_arc(db, c["character_id"], req.season, req.episode, req.progress)[0]) != "hidden"],
+                    "thresholds": {"similarity": _SIMILARITY_THRESHOLD, "margin": _MIN_MARGIN,
+                                   "detector": _MIN_DET_SCORE},
+                    "model": {"name": _MODEL_NAME, "det_size": [640, 640]},
+                    "gallery": eval_store.gallery_version(_DATA_DIR, req.show_id, index),
+                    "calibration_version": eval_store.digest(Path(calibration.__file__).read_bytes()),
+                    "app": eval_store.app_version()})
+    except Exception:
+        eval_store.note_failure(_DATA_DIR)
+    return response
 
 
 @app.post("/load-show")
