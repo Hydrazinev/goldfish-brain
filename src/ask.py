@@ -254,9 +254,9 @@ _recent_reactions: dict[str, list[tuple]] = {}
 def _later_than_now(entry, season: int, episode: int, progress: Optional[float]) -> bool:
     if (entry[0], entry[1]) != (season, episode):
         return (entry[0], entry[1]) > (season, episode)
-    if entry[3] is None:
-        return False
-    return progress is None or entry[3] > progress      # unknown now: be conservative
+    # Unknown position inside the episode counts as its END (conservative): any rewind drops it.
+    then = 1.0 if entry[3] is None else entry[3]
+    return progress is None or then > progress          # unknown now: be conservative
 
 
 def recent_for(show_id: str, season: int, episode: int, progress: Optional[float] = None) -> tuple[str, ...]:

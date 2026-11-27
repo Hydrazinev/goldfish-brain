@@ -356,7 +356,7 @@ function noteForm(c, data, hooks) {
       status: r.status.value, arc_type: r.arcType.value, current_arc: r.now.ta.value, last_seen_description: r.scene.ta.value }));
     const lines = bio.value.split("\n").map(x => x.trim()).filter(Boolean);
     saveBtn.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
-    const res = await api("/characters/" + encodeURIComponent(c.character_id) + "/notes", { method: "PUT",
+    const res = await api("/characters/" + encodeURIComponent(c.character_id) + "/notes" + (spoilers ? "?all=1" : ""), { method: "PUT",
       body: { relationship_summary: lines.join("; "), entries } });
     saveBtn.disabled = false;
     if (res.ok && res.data.ok) {

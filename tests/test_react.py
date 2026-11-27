@@ -149,17 +149,17 @@ def test_react_validates_position_and_show():
 
 
 def test_recent_reactions_are_per_show():
-    ask._remember_reaction("bb", 1, 2, "Walt reaction.")
-    assert ask.recent_for("bb", 1, 2) == ("Walt reaction.",)
+    ask._remember_reaction("bb", 1, 2, "Walt reaction.", 0.3)
+    assert ask.recent_for("bb", 1, 2, 0.5) == ("Walt reaction.",)
     assert ask.recent_for("other-show", 5, 5) == ()
 
 
 def test_recent_reactions_from_a_later_position_are_dropped_after_a_rewind():
-    ask._remember_reaction("bb", 1, 2, "early")
-    ask._remember_reaction("bb", 3, 1, "late spoiler")
-    assert ask.recent_for("bb", 3, 1) == ("early", "late spoiler")
-    assert ask.recent_for("bb", 1, 2) == ("early",)
-    assert ask.recent_for("bb", 3, 1) == ("early",), "the later entry is gone for good"
+    ask._remember_reaction("bb", 1, 2, "early", 0.3)
+    ask._remember_reaction("bb", 3, 1, "late spoiler", 0.5)
+    assert ask.recent_for("bb", 3, 1, 0.9) == ("early", "late spoiler")
+    assert ask.recent_for("bb", 1, 2, 0.4) == ("early",)
+    assert ask.recent_for("bb", 3, 1, 0.9) == ("early",), "the later entry is gone for good"
 
 
 def test_react_after_rewind_does_not_show_later_reaction_in_prompt():
@@ -180,4 +180,11 @@ def test_unknown_current_progress_drops_same_episode_entries_with_progress():
     ask._remember_reaction("bb", 1, 2, "has progress", 0.4)
     ask._remember_reaction("bb", 1, 2, "no progress")
     ask._remember_reaction("bb", 1, 1, "earlier ep", 0.9)
-    assert ask.recent_for("bb", 1, 2, None) == ("no progress", "earlier ep")
+    assert ask.recent_for("bb", 1, 2, None) == ("earlier ep",)
+
+
+def test_reaction_recorded_without_progress_is_dropped_after_any_rewind_in_that_episode():
+    ask._remember_reaction("bb", 1, 2, "unknown spot")          # progress was unreadable then
+    assert ask.recent_for("bb", 1, 2, 0.5) == ()                # treated as the END of the episode
+    ask._remember_reaction("bb", 1, 2, "unknown spot again")
+    assert ask.recent_for("bb", 1, 3, 0.1) == ("unknown spot again",)   # a later episode: fine

@@ -384,6 +384,7 @@ def identify(req: IdentifyRequest):
             continue
 
         any_face_attempted = True
+        _aug_gallery = (_DATA_DIR / "shows" / req.show_id / "gallery_aug.flag").exists()
         matches = index.search(embedding, top_k=5)
 
         # Keep only confident hits, and only when the best one clearly beats the runner-up
@@ -395,7 +396,7 @@ def identify(req: IdentifyRequest):
             hits = []
         face_hits.append(hits)
         face_log.append({"score": round(float(top1), 4), "margin": round(float(margin), 4),
-                         "p_correct": calibration.calibrated_confidence(top1, margin),
+                         "p_correct": None if _aug_gallery else calibration.calibrated_confidence(top1, margin),
                          "face_h": accuracy.face_height(_bbox), "character_id": None})
 
     # One face per character: a second face can no longer be swallowed by the
@@ -422,7 +423,7 @@ def identify(req: IdentifyRequest):
             continue
 
         result = _build_character_result(char, confidence, arc)
-        if abs(face_log[face_i]["score"] - confidence) < 1e-3:     # only when this IS the face's top-1
+        if face_log[face_i]["p_correct"] is not None and abs(face_log[face_i]["score"] - confidence) < 1e-3:     # only when this IS the face's top-1
             result["calibrated_confidence"] = face_log[face_i]["p_correct"]
         result["as_of"] = as_of
         result["also_in"] = also_in

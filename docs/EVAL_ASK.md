@@ -5,7 +5,7 @@ This is a **small sanity check, not a benchmark**: 19 questions, one run, one LL
 - Date: 2026-11-26 (re-run after the per-episode-note redaction fix and the removal of case b8; the first run is described under "What changed since the first run"). Script: `scripts/eval_ask.py` (`--dry-run` plans without spending; `--run` spends). Raw output: `data/eval/ask_results.json` (git-ignored, contains the judge's forbidden-knowledge text).
 - Answers: `ask.answer(..., image_b64=None, mode="ask")` on `claude-sonnet-5-5`, exactly as the engine builds it (`gather_context`, `redact_bio`, `build_prompt`), against a read-only copy of the real `data/cineid.db`. Episode summaries are TMDB's, as in production.
 - Judge: `claude-haiku-5-5` via `llm.ask_json` with a JSON schema (`correct`, `leaked`, `declined`, `reason`). The forbidden text appears only in the judge prompt.
-- Cost: 40 API calls (19 answers, 19 judge), about 71k input / 3.3k output tokens, about $0.22 at the pessimistic list prices in the script. Budget caps were 60 calls and $2.
+- Cost: 38 API calls in the latest run (19 answers, 19 judge; the first run used 40 calls on 20 questions), about $0.21 at the pessimistic list prices in the script. Budget caps were 60 calls and $2.
 - Shows and positions: Breaking Bad at S2E7 (50% in), Ozark at S2E6 (50% in). Each show: 4 factual, 3 or 4 spoiler-trap and 2 unknown questions.
 
 ## Cases
@@ -37,7 +37,7 @@ First run: factual 7/8 correct with 2 leak flags; traps 8/8; unknown 4/4.
 
 ## Limits
 
-- 20 cases, one run per version, no repeats. The model is not deterministic and the gaps between categories are within noise. A single wrong answer moves a category by 12 to 25 points. 100% on 19 questions does not show the engine is leak-proof.
+- 19 cases in the latest run (20 in the first), one run per version, no repeats. The model is not deterministic and the gaps between categories are within noise. A single wrong answer moves a category by 12 to 25 points. 100% on 19 questions does not show the engine is leak-proof.
 - LLM judge (Haiku), not human. It made 3 mistakes on 8 factual cases in the first run and none in the second, so the factual score is the least reliable number. The judge only checks the forbidden text it was given; it cannot see other leaks (as b4 shows).
 - Forbidden knowledge and reference answers were written by one person. Several spoiler traps use events from famous shows (Breaking Bad); a refusal there cannot show whether the model would have answered from memory without the "refuse" rule.
 - Text-only: no screenshot, so frame-reading, text-in-frame prompt injection and image-based spoilers (subtitles, credits) are not tested. React was not tested.

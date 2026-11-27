@@ -112,3 +112,11 @@ Reliability (LR(sim, margin), test, all faces; predicted vs observed correct): b
 ### Limits of both experiments
 
 Synthetic data only; no real streaming frame was measured. 4 held-out shows, 81 characters, a few hundred frames, one run, no confidence intervals. Same-show extras, twins, makeup and angle changes are absent. The 62 / 29 faces the detector never finds are outside both experiments.
+
+### Calibration scope (correction)
+
+`calibrated_confidence` was fitted on galleries built from the **clean** reference photos. New shows now use the
+**augmented** gallery, whose similarity and margin distributions differ, so the ECE above does **not** validate that
+combination. The engine therefore emits `calibrated_confidence` (and `p_correct` in the accuracy log) only for shows
+without a `gallery_aug.flag` file in their data folder, and leaves it empty for augmented shows until the model is
+refitted on real frames.

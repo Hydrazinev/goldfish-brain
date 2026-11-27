@@ -417,6 +417,25 @@ def build_router(deps: ApiDeps) -> APIRouter:
             season, episode = _saved_position(show_id)
         return _relationships.build_graph(db.get_show_characters(show_id), season, episode, db=db)
 
+    def _hidden_visible(db, char):
+        season, episode = _saved_position(char["show_id"])
+        hidden, visible = [], []
+        for c in db.get_show_characters(char["show_id"]):
+            (visible if _is_met(db, c, season, episode) else hidden).append(c["character_name"])
+        return hidden, visible
+
+    def _keep_hidden(stored: str, submitted: str, redact) -> str:
+        """The editor shows a redacted view. Unchanged view -> keep the stored text untouched; edited view ->
+        keep what you wrote and append the parts that were hidden from you, so saving never deletes them."""
+        shown = redact(stored)
+        if (submitted or "").strip() == (shown or "").strip():
+            return stored
+        removed = [p for p in _split_parts(stored) if p not in _split_parts(shown)]
+        return " ".join([(submitted or "").strip()] + removed).strip()
+
+    def _split_parts(text: str):
+        return [p.strip() for p in re.split(r"(?<=[.!?;])\s+|;\s*", text or "") if p.strip()]
+
     @r.get("/characters/{character_id}/notes")
     def get_notes(character_id: str, all: int = 0):
         db = deps.get_db()
@@ -450,14 +469,29 @@ def build_router(deps: ApiDeps) -> APIRouter:
                 "ai_rows": db.count_ai_arcs(character_id)}
 
     @r.put("/characters/{character_id}/notes")
-    def put_notes(character_id: str, body: NotesBody):
+    def put_notes(character_id: str, body: NotesBody, all: int = 0):
         db = deps.get_db()
-        if not db.get_character(character_id):
+        char = db.get_character(character_id)
+        if not char:
             return _err("That character isn't in your library.", 404)
         entries, problem = validate_notes(body)
         if problem:
             return _err(problem)
         bio = body.relationship_summary.strip() if body.relationship_summary is not None else None
+        if not all:
+            # You were shown a redacted view (no unmet characters): never write that view over the real text.
+            hidden, visible = _hidden_visible(db, char)
+            if bio is not None:
+                bio = _keep_hidden(char.get("relationship_summary") or "", bio,
+                                   lambda t: _ask.redact_bio(t, hidden, visible))
+            stored = {(row["season"], row["episode"]): row for row in db.get_user_arcs(character_id)}
+            for en in entries:
+                old = stored.get((en.get("season"), en.get("episode")))
+                if not old:
+                    continue
+                for k in ("current_arc", "last_seen_description"):
+                    en[k] = _keep_hidden(old.get(k) or "", en.get(k) or "",
+                                         lambda t: _ask.redact_text(t, hidden, visible))
         try:
             db.replace_user_arcs(character_id, entries, bio)
             db.derive_first_seen_for_character(character_id)

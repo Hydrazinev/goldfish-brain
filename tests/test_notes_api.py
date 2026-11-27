@@ -155,3 +155,23 @@ def test_get_notes_redacts_hidden_character_names_unless_all():
     assert "Cooks." in j["entries"][0]["current_arc"]
     full = e.client.get("/api/characters/s-a/notes?all=1").json()
     assert "Gus Fring" in full["relationship_summary"] and "Gus Fring" in full["entries"][0]["current_arc"]
+
+
+def test_saving_the_redacted_view_does_not_delete_hidden_text():
+    """Open the editor (redacted view), change nothing, Save: nothing hidden may be lost."""
+    e = setup()
+    e.db.add_character("s-m", "s", "Mike Ehrmantraut", actor_name="Jonathan Banks",
+                       first_season=3, first_episode=1)           # not met at the saved S1E1
+    stored_bio = "Partner of Jimmy; ex-partner of Mike Ehrmantraut."
+    e.db.add_character("s-a", "s", "Saul", actor_name="Bob Odenkirk", actor_tmdb_id=5,
+                       relationship_summary=stored_bio, first_season=1, first_episode=1)
+    e.db.replace_user_arcs("s-a", [{"season": 1, "episode": 1, "status": "alive", "arc_type": "other",
+                                    "current_arc": "He is wary. He meets Mike Ehrmantraut later.",
+                                    "last_seen_description": "A scene"}])
+    j = e.client.get("/api/characters/s-a/notes").json()
+    assert "Mike" not in j["relationship_summary"] and "Mike" not in j["entries"][0]["current_arc"]
+    put_body = {"relationship_summary": j["relationship_summary"], "entries": j["entries"]}
+    assert e.client.put("/api/characters/s-a/notes", json=put_body).status_code == 200
+    full = e.client.get("/api/characters/s-a/notes?all=1").json()
+    assert "Mike Ehrmantraut" in full["relationship_summary"]
+    assert "Mike Ehrmantraut" in full["entries"][0]["current_arc"]

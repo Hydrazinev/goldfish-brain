@@ -364,6 +364,8 @@ def ingest_show(show_name: str, tmdb_id: Optional[int] = None) -> None:
     # Save FAISS index
     index_path = show_dir / "embeddings.faiss"
     index.save(index_path)
+    if os.environ.get("CINEID_GALLERY_AUG", "1") != "0":
+        (show_dir / "gallery_aug.flag").write_text("1")     # calibration was fitted on the clean gallery
 
     # Mark show ready
     db.update_show_status(show_id, "ready" if ingested > 0 else "failed")
