@@ -7,6 +7,8 @@ struct AskAnswer: Equatable {
     let refused: Bool
     /// "S3E7" when the engine said how far the answer is safe to go.
     let safeUpTo: String?
+    /// Set for a Watch Buddy reaction (there is no question then): the card's header.
+    var buddyName: String? = nil
 }
 
 enum AskPhase: Equatable {
@@ -14,6 +16,8 @@ enum AskPhase: Equatable {
     /// The text field is open; the screenshot is being taken in the background.
     case input
     case thinking(question: String)
+    /// ⌘⇧R: the Watch Buddy is looking at the scene.
+    case reacting
     case answer(AskAnswer)
     /// A plain-language problem (no permission, engine warming up, privacy box not ticked, ...).
     case message(String)
@@ -23,6 +27,7 @@ enum AskPhase: Equatable {
 @MainActor
 final class AskModel: ObservableObject {
     nonisolated static let historyLimit = 5
+    nonisolated static let defaultBuddyName = "Watch Buddy"
     nonisolated static let defaultAnswerFade: TimeInterval = 20
 
     @Published private(set) var phase: AskPhase = .hidden
@@ -57,6 +62,22 @@ final class AskModel: ObservableObject {
         recallIndex = nil
         phase = .thinking(question: question)
         return question
+    }
+
+    /// ⌘⇧R: straight to "Thinking…", no text field.
+    func openReacting() {
+        fade.stop()
+        draft = ""
+        recallIndex = nil
+        phase = .reacting
+    }
+
+    func showReaction(response: AskResponse) {
+        phase = .answer(AskAnswer(question: "", text: response.answer, refused: response.refused,
+                                  safeUpTo: response.safeUpTo?.short,
+                                  buddyName: response.buddyName ?? Self.defaultBuddyName))
+        fade.duration = Self.defaultAnswerFade
+        fade.start()
     }
 
     func showAnswer(question: String, response: AskResponse) {

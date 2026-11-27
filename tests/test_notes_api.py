@@ -130,3 +130,12 @@ def test_saving_makes_character_introduced_from_earliest_entry_only():
     e.db.update_character_first_seen("s-a", 1, 1)
     put(e, {"entries": [entry(3, 1)]})
     assert e.db.get_character("s-a")["first_season"] == 1                         # not moved later
+
+
+def test_put_marks_a_changed_bio_as_user_edited():
+    e = setup()
+    assert e.db.is_bio_user_edited("s-a") is False
+    put(e, {"entries": [entry(3, 3)]})                    # no bio sent: not marked
+    assert e.db.is_bio_user_edited("s-a") is False
+    put(e, {"relationship_summary": "My words", "entries": []})
+    assert e.db.is_bio_user_edited("s-a") is True

@@ -10,6 +10,8 @@ struct HotKeyCombo: Equatable, Hashable {
     static let identify = HotKeyCombo(keyCode: UInt32(kVK_ANSI_X), modifiers: UInt32(cmdKey | shiftKey))
     /// ⌘⇧E: ask a question about what is on screen.
     static let ask = HotKeyCombo(keyCode: UInt32(kVK_ANSI_E), modifiers: UInt32(cmdKey | shiftKey))
+    /// ⌘⇧R: the Watch Buddy reacts to what is on screen (no typing).
+    static let react = HotKeyCombo(keyCode: UInt32(kVK_ANSI_R), modifiers: UInt32(cmdKey | shiftKey))
     /// Esc on its own. Registered only while a card is on screen (see `DismissWatcher`).
     static let escape = HotKeyCombo(keyCode: UInt32(kVK_Escape), modifiers: 0)
 }

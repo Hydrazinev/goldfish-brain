@@ -361,10 +361,12 @@ def main():
                 # New shape nests arcs under "episodes" and adds bio +
                 # first_appearance; tolerate the old flat shape too.
                 bio = (data.get("relationship_summary") or "").strip()
-                if bio:
+                # The owner edited this character in the notes editor: keep their bio and first appearance.
+                user_edited = db.is_bio_user_edited(char["character_id"])
+                if bio and not user_edited:
                     db.update_character_bio(char["character_id"], bio)
                 first = _parse_ep_code(str(data.get("first_appearance") or ""))
-                if first:
+                if first and not user_edited:
                     db.update_character_first_seen(char["character_id"], *first)
                 ep_data = data.get("episodes", data)
                 # Fresh slate: stale all-"unknown" rows from failed runs would

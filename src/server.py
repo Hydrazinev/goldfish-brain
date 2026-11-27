@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,6 +18,7 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).parent))
 from recogniser import FaceRecogniser, FaceIndex
 from database import CharacterDB
+import accuracy
 import actor_credits
 import api_routes
 import key_check
@@ -33,6 +35,12 @@ _CONFIG_PATH = _DATA_DIR / "config.json"
 _UI_DIR = Path(__file__).parent / "ui"
 _MODEL_NAME = "buffalo_l"
 _SIMILARITY_THRESHOLD = 0.5
+# A face is matched only if its best score is at least this far above the runner-up
+# (else it is "not sure", never a coin-flip name). Measured, see docs/ACCURACY.md.
+try:
+    _MIN_MARGIN = float(os.environ.get("CINEID_MIN_MARGIN", "0.0"))
+except ValueError:
+    _MIN_MARGIN = 0.0
 _MIN_DET_SCORE = 0.5      # ignore very low-quality detections (blurry/partial faces)
 
 
@@ -187,6 +195,25 @@ def _decode_image(b64: str) -> np.ndarray:
     return image
 
 
+def _save_last_capture(b64: str, image: np.ndarray, data_dir: Optional[Path] = None) -> None:
+    """Keep the most recent /identify frame at data/last_capture.jpg (local only, overwritten each time)
+    so a feedback report attaches the frame that was actually identified. Never raises."""
+    try:
+        raw = base64.b64decode(b64)
+        if raw[:2] != b"\xff\xd8":                       # not a JPEG (e.g. PNG): re-encode
+            ok, buf = cv2.imencode(".jpg", image)
+            if not ok:
+                return
+            raw = buf.tobytes()
+        folder = Path(data_dir) if data_dir else _DATA_DIR
+        folder.mkdir(parents=True, exist_ok=True)
+        tmp = folder / "last_capture.jpg.tmp"
+        tmp.write_bytes(raw)
+        tmp.replace(folder / "last_capture.jpg")
+    except Exception:
+        pass
+
+
 def _arc_shows_presence(arc: Optional[dict]) -> bool:
     """True if a per-episode arc row proves the character has appeared."""
     if not arc:
@@ -328,6 +355,7 @@ def identify(req: IdentifyRequest):
         image = _decode_image(req.image)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid image: {exc}")
+    _save_last_capture(req.image, image)
 
     if req.show_id not in indexes:
         raise HTTPException(
@@ -346,6 +374,7 @@ def identify(req: IdentifyRequest):
     hidden_by_shield = 0
 
     face_hits: list[list[tuple[str, float]]] = []
+    face_log: list[dict] = []
     for _crop, _bbox, face in face_detections:
         if getattr(face, "det_score", 1.0) < _MIN_DET_SCORE:
             continue
@@ -356,15 +385,24 @@ def identify(req: IdentifyRequest):
         any_face_attempted = True
         matches = index.search(embedding, top_k=5)
 
-        # Keep only confident hits
-        face_hits.append([(cid, score) for cid, score in matches if score >= _SIMILARITY_THRESHOLD])
+        # Keep only confident hits, and only when the best one clearly beats the runner-up
+        top1 = matches[0][1] if matches else 0.0
+        top2 = matches[1][1] if len(matches) > 1 else 0.0
+        margin = top1 - top2
+        hits = [(cid, score) for cid, score in matches if score >= _SIMILARITY_THRESHOLD]
+        if margin < _MIN_MARGIN:
+            hits = []
+        face_hits.append(hits)
+        face_log.append({"score": round(float(top1), 4), "margin": round(float(margin), 4),
+                         "face_h": accuracy.face_height(_bbox), "character_id": None})
 
     # One face per character: a second face can no longer be swallowed by the
     # character the first face already claimed.
-    for assigned in _assign_one_to_one(face_hits):
+    for face_i, assigned in enumerate(_assign_one_to_one(face_hits)):
         if assigned is None:
             continue
         character_id, confidence = assigned
+        face_log[face_i]["character_id"] = character_id
         char = db.get_character(character_id)
         if char is None:
             continue
@@ -387,6 +425,12 @@ def identify(req: IdentifyRequest):
         characters.append(result)
 
     characters = _dedupe_and_rank(characters)
+
+    not_sure = any_face_attempted and not characters and not hidden_by_shield
+    for row in face_log:
+        row["not_sure"] = not_sure and row["character_id"] is None
+    accuracy.log_faces(_DATA_DIR, face_log, show_id=req.show_id,
+                       season=req.season, episode=req.episode)
 
     # A recognised character was withheld to avoid spoilers: say so, instead
     # of the misleading "face not recognised".

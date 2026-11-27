@@ -58,6 +58,20 @@ class FaceRecogniser:
             return None
         return emb.copy()
 
+    def photo_embeddings(
+        self, image_paths: list[str | Path]
+    ) -> list[tuple[Path, np.ndarray]]:
+        """(path, embedding) for each image with exactly one clean face (det_score >= 0.7)."""
+        out: list[tuple[Path, np.ndarray]] = []
+        for path in image_paths:
+            image = cv2.imread(str(path))
+            if image is None:
+                continue
+            faces = [f for f in self._app.get(image) if f.det_score >= _DET_SCORE_MIN]
+            if len(faces) == 1:
+                out.append((Path(path), faces[0].embedding.copy()))
+        return out
+
     # ------------------------------------------------------------------
     # Gallery building
     # ------------------------------------------------------------------

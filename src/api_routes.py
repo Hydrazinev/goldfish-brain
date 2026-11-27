@@ -30,6 +30,7 @@ import buddy as _buddy
 import actor_credits
 import ask as _ask
 import config_store
+import accuracy as _accuracy
 import feedback as _feedback
 import llm as _llm
 import relationships as _relationships
@@ -143,6 +144,7 @@ class AskBody(BaseModel):
     season: int
     episode: int
     progress: Optional[float] = None
+    mode: str = "ask"          # "ask" | "react" (the Watch Buddy's on-demand reaction)
 
 
 class FeedbackBody(BaseModel):
@@ -269,6 +271,8 @@ def build_router(deps: ApiDeps) -> APIRouter:
             "shows": shows,
             "job": deps.runner.status(),
             "needs_first_run": (not tmdb) or (not ready),
+            # Ask/React upload a screenshot: only the Chrome window unless the owner turned this off.
+            "share_only_window": (cfg.get("buddy") or {}).get("share_only_window", True) is not False,
         }
 
     # keys -------------------------------------------------------------------
@@ -489,6 +493,26 @@ def build_router(deps: ApiDeps) -> APIRouter:
         except Exception:
             return {"season": None}
 
+    _structure = {"cache": {}}
+
+    @r.get("/shows/{show_id}/structure")
+    def show_structure(show_id: str):
+        """Episodes per season from TMDB, e.g. {"seasons": {"1": 10, "2": 8}}; {} if unknown. Never an error."""
+        try:
+            show = next((s for s in deps.get_db().get_all_shows() if s["show_id"] == show_id), None)
+            api_key = key("TMDB_API_KEY")
+            if not show or not show.get("tmdb_id") or not api_key:
+                return {"seasons": {}}
+            cache = _structure["cache"]
+            if show["tmdb_id"] not in cache:
+                data = deps.tmdb_get(f"tv/{show['tmdb_id']}", {"api_key": api_key})
+                cache[show["tmdb_id"]] = {str(x["season_number"]): int(x.get("episode_count") or 0)
+                                          for x in data.get("seasons", [])
+                                          if x.get("season_number", 0) >= 1 and (x.get("episode_count") or 0) > 0}
+            return {"seasons": cache[show["tmdb_id"]]}
+        except Exception:
+            return {"seasons": {}}
+
     # ask about this scene ---------------------------------------------------------
 
     _guide = {"cache": {}}
@@ -507,8 +531,8 @@ def build_router(deps: ApiDeps) -> APIRouter:
         api_key = key("ANTHROPIC_API_KEY")
         if not api_key:
             return _api_err("Add your Anthropic key in Settings to ask questions.")
+        cfg = config_store.read_config(deps.config_path) if body.image_b64 or body.mode == "react" else {}
         if body.image_b64:
-            cfg = config_store.read_config(deps.config_path)
             if not (cfg.get("buddy") or {}).get("disclosure_ack"):
                 return _api_err("needs_disclosure", 403)    # the screenshot goes to Anthropic
         try:
@@ -517,7 +541,8 @@ def build_router(deps: ApiDeps) -> APIRouter:
                                  image_b64=body.image_b64, show_id=body.show_id,
                                  season=body.season, episode=body.episode,
                                  progress=body.progress, guide_fn=_cached_guide,
-                                 tmdb_key=key("TMDB_API_KEY"))
+                                 tmdb_key=key("TMDB_API_KEY"), mode=body.mode,
+                                 buddy=cfg.get("buddy"))
         except _ask.AskError as exc:
             return _api_err(exc.message, exc.status)
         except _llm.LLMError as exc:
@@ -551,6 +576,10 @@ def build_router(deps: ApiDeps) -> APIRouter:
     def feedback_summary():
         return _feedback.summary(deps.data_dir) if deps.data_dir else \
             {"total": 0, "wrong": 0, "missed": 0, "ok": 0}
+
+    @r.get("/accuracy/summary")
+    def accuracy_summary():
+        return _accuracy.summary(deps.data_dir or Path("/nonexistent-cineid"))
 
     # buddy / permissions -------------------------------------------------------
 

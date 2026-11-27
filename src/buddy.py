@@ -116,6 +116,8 @@ def _build_prompt(
     season: int,
     episode: int,
     characters: list[dict],
+    recap: str = "",
+    recent: tuple = (),
 ) -> str:
     desc = _PERSONALITY_DESCRIPTIONS.get(personality, _PERSONALITY_DESCRIPTIONS["mac"])
     opener = _PERSONALITY_OPENERS.get(personality, _PERSONALITY_OPENERS["mac"])
@@ -127,14 +129,20 @@ def _build_prompt(
         f"You are {buddy_name}, a {desc} friend watching {show_title} with the user.\n"
         f"They are currently on Season {season}, Episode {episode}.\n"
         f"IMPORTANT: Do NOT reference or hint at anything that happens after this episode. No spoilers.\n\n"
-        f"What's happening in the story right now:\n"
+        + (f"The story so far (earlier episodes only):\n{recap}\n\n" if recap else "")
+        + f"What's happening with the characters right now:\n"
         f"{char_lines if char_lines else '(no character data available)'}\n\n"
+        + (("Your last reactions (do NOT repeat their ideas or wording):\n"
+            + "\n".join(f"- {m}" for m in recent) + "\n\n") if recent else "")
+        +
         f"[Screenshot of the current scene attached]\n\n"
         f"Use the screenshot to identify who is actually on screen. "
         f"Then use their story context above to ask a question that's specific to their current situation — "
         f"not a generic 'what do you think will happen' but something tied to the exact arc listed. "
         f"{opener} "
-        f"Under 35 words. Sound like a friend who's been watching closely, not a recap bot."
+        f"Mention one concrete thing you can actually see in the frame (an expression, object, place) and tie it to the story. "
+        f"No generic filler like 'what do you think happens next'. Under 40 words. "
+        f"Sound like a friend who's been watching closely, not a recap bot."
     )
 
 
@@ -239,6 +247,30 @@ def _get_show_title(db_path: str | Path, show_id: str) -> str:
     return row[0] if row else show_id
 
 
+_recent_reactions: list = []          # last few things the buddy said, so it doesn't repeat itself
+_guide_cache: dict = {}
+
+
+def _story_recap(db_path: Path, show_id: str, season: int, episode: int, config_path: Path) -> str:
+    """TMDB summaries of episodes strictly BEFORE the current one ('' if unavailable)."""
+    try:
+        from database import CharacterDB
+        db = CharacterDB(db_path=db_path)
+        tmdb_id = (db.get_show(show_id) or {}).get("tmdb_id")
+        db.close()
+        key = (os.environ.get("TMDB_API_KEY", "")
+               or config_store.read_env_key(config_path.parent.parent / ".env", "TMDB_API_KEY"))
+        if not tmdb_id or not key:
+            return ""
+        if tmdb_id not in _guide_cache:
+            from populate_metadata import _get_episode_guide
+            _guide_cache[tmdb_id] = _get_episode_guide(tmdb_id, key)
+        import ask as _ask
+        return _ask.previous_summaries(_guide_cache[tmdb_id], season, episode)[-6000:]
+    except Exception:
+        return ""
+
+
 def _generate_buddy_message(config_path: Path, db_path: Path) -> Optional[str]:
     try:
         cfg = json.loads(config_path.read_text())
@@ -274,6 +306,8 @@ def _generate_buddy_message(config_path: Path, db_path: Path) -> Optional[str]:
         season=season,
         episode=episode,
         characters=characters,
+        recap=_story_recap(db_path, show_id, season, episode, config_path),
+        recent=tuple(_recent_reactions[-3:]),
     )
 
     api_key = (os.environ.get("ANTHROPIC_API_KEY", "")
@@ -286,7 +320,12 @@ def _generate_buddy_message(config_path: Path, db_path: Path) -> Optional[str]:
     try:
         import llm
         client = llm.make_client(api_key)
-        return llm.ask(client, prompt, max_tokens=200, image_b64=b64)
+        # Sonnet reads a scene far better than Haiku; override with CINEID_BUDDY_MODEL.
+        reply = llm.ask(client, prompt, max_tokens=400, image_b64=b64,
+                        model=os.environ.get("CINEID_BUDDY_MODEL", "claude-sonnet-5-5"))
+        _recent_reactions.append(reply)
+        del _recent_reactions[:-5]
+        return reply
     except Exception as exc:
         print(f"[Buddy] Claude call failed: {exc}")
         return None

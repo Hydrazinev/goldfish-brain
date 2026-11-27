@@ -142,3 +142,43 @@ def test_overview_has_notes_counts_user_entries():
                                   "current_arc": "x", "last_seen_description": ""}])
     notes = {r["character_id"]: r["has_notes"] for r in db.get_show_characters_overview("s")}
     assert notes == {"s-a": False, "s-b": True}
+
+
+def test_saving_a_changed_bio_marks_it_user_edited_and_old_dbs_migrate():
+    db = _db()
+    assert db.is_bio_user_edited("s-a") is False
+    db.update_character_bio("s-a", "generated bio")
+    db.replace_user_arcs("s-a", [], "generated bio")          # unchanged text: not the owner's words
+    assert db.is_bio_user_edited("s-a") is False
+    db.replace_user_arcs("s-a", [], "my own bio")
+    assert db.is_bio_user_edited("s-a") is True
+    db.replace_user_arcs("s-a", [], None)                      # a save without a bio keeps the mark
+    assert db.is_bio_user_edited("s-a") is True
+    assert db.get_character("s-a")["relationship_summary"] == "my own bio"
+
+
+def test_regenerating_notes_keeps_a_user_edited_bio(monkeypatch, tmp_path):
+    import populate_metadata as pm
+    db_path = tmp_path / "t.db"
+    db = CharacterDB(db_path=db_path)
+    db.add_show("s", "S", tmdb_id=7)
+    db.add_character("s-a", "s", "A", actor_name="Ann", first_season=2, first_episode=3)
+    db.add_character("s-b", "s", "B", actor_name="Bob", first_season=2, first_episode=3)
+    db.replace_user_arcs("s-a", [], "my own bio")
+    db.close()
+    monkeypatch.setattr(pm, "_DB_PATH", db_path)
+    monkeypatch.setattr(pm, "_load_config", lambda: {"show_id": "s", "season": 1, "episode": 1})
+    monkeypatch.setattr(pm.llm, "make_client", lambda key: object())
+    monkeypatch.setattr(pm.llm, "ask", lambda *a, **k: "OK")
+    monkeypatch.setattr(pm, "_show_overview", lambda *a, **k: "")
+    monkeypatch.setattr(pm, "_get_episode_guide", lambda *a, **k: [{"season": 1, "episode": 1}])
+    monkeypatch.setattr(pm, "_generate_all_episodes", lambda *a, **k: {
+        "relationship_summary": "AI bio", "first_appearance": "S01E01",
+        "episodes": {"S01E01": {"status": "alive", "current_arc": "x"}}})
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("TMDB_API_KEY", "t")
+    monkeypatch.setattr(sys, "argv", ["populate_metadata.py", "--show", "s", "--all-episodes"])
+    pm.main()
+    db = CharacterDB(db_path=db_path)
+    assert db.get_character("s-a")["relationship_summary"] == "my own bio"
+    assert db.get_character("s-b")["relationship_summary"] == "AI bio"

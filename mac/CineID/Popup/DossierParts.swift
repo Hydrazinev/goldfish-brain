@@ -205,11 +205,15 @@ struct DossierStamp: View {
 
 /// The match as a bar (rust-red fill on a paper-coloured track) with the percentage beside it.
 struct DossierMatchBar: View {
+    /// The number is face similarity, not the chance the name is right: say so.
+    static let label = "Match strength"
+    static func accessibilityText(percent: Int) -> String { "\(percent) percent match strength" }
+
     let percent: Int
 
     var body: some View {
         HStack(spacing: 10) {
-            DossierLabel("Match")
+            DossierLabel(Self.label)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(DossierTheme.track)
@@ -222,7 +226,7 @@ struct DossierMatchBar: View {
                 .font(DossierTheme.typewriter(13, .bold))
                 .monospacedDigit()
                 .foregroundStyle(DossierTheme.ink)
-                .accessibilityLabel("\(percent) percent match")
+                .accessibilityLabel(Self.accessibilityText(percent: percent))
         }
         .accessibilityElement(children: .combine)
     }

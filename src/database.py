@@ -89,6 +89,7 @@ class CharacterDB:
             ("last_seen_description", "TEXT"),
             ("arc_type",              "TEXT"),
             ("actor_tmdb_id",         "INTEGER"),
+            ("bio_user_edited",       "INTEGER DEFAULT 0"),   # 1 = the owner wrote the bio; regenerating notes keeps it
         ]:
             if col not in existing_chars:
                 self._conn.execute(f"ALTER TABLE characters ADD COLUMN {col} {defn}")
@@ -180,8 +181,11 @@ class CharacterDB:
         conn = self._conn
         try:
             if bio is not None:
-                conn.execute("UPDATE characters SET relationship_summary = ? WHERE character_id = ?",
-                             (bio, character_id))
+                # A changed bio is the owner's own words: mark it so regenerating notes never overwrites it.
+                conn.execute(
+                    "UPDATE characters SET bio_user_edited = CASE WHEN COALESCE(relationship_summary, '') <> ? "
+                    "THEN 1 ELSE COALESCE(bio_user_edited, 0) END, relationship_summary = ? "
+                    "WHERE character_id = ?", (bio, bio, character_id))
             conn.execute("DELETE FROM character_arcs WHERE character_id = ? AND source = 'user'",
                          (character_id,))
             for e in entries:
@@ -256,6 +260,11 @@ class CharacterDB:
             (summary, character_id),
         )
         self._conn.commit()
+
+    def is_bio_user_edited(self, character_id: str) -> bool:
+        row = self._conn.execute("SELECT bio_user_edited FROM characters WHERE character_id = ?",
+                                 (character_id,)).fetchone()
+        return bool(row and row[0])
 
     def derive_first_seen_from_arcs(self, show_id: str) -> int:
         """Set first_season/first_episode from the earliest arc row that shows

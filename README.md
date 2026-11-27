@@ -2,59 +2,79 @@
 
 # Goldfish Brain
 
-**Forgot who that character is? Press a key.**
+**Forgot who that character is? Press a key.** A Mac app that recognises the TV character on your screen and tells you who they are, who plays them and where they stand in the story, **only up to the episode you have reached**.
 
-Goldfish Brain is a Mac app that recognises the TV character on your screen and tells you who they are, who plays them and where they stand in the story — **only up to the episode you've reached**. No pausing, no googling, no spoilers.
+Website (interactive demo, no install needed): https://hydrazinev.github.io/goldfish-brain/
 
-Website: https://hydrazinev.github.io/goldfish-brain/
+> Built with AI assistance (Claude Code) under my direction. The design decisions below are mine to explain; the code was written with help, reviewed, and covered by tests.
 
 ## What it does
 
-- **⌘⇧X — Who's that?** One screenshot, faces matched on your Mac, a paper "dossier" card pops up: name, actor, biography, what's happening to them *right now*, last scene, and the actor's other movies and series.
-- **⌘⇧E — Ask.** Type a question about the scene ("why is she upset?"). You get a short answer that never goes beyond your current episode, and the video never pauses.
-- **Spoiler shield.** Characters who first appear later are hidden. Notes are written "as of the start of this episode".
-- **Knows your episode.** Reads it from your Netflix tab in Chrome (falls back to a position you set).
-- **Relationship map** for every show — only people you've already met.
-- **Your own notes.** Write or correct any character's notes, per episode.
-- **Add any show.** Search, pick the poster, wait a few minutes.
-- **"Wrong?" / "Missed someone"** buttons save the frame locally so accuracy can be measured.
+- **⌘⇧X, Who is that?** One screenshot, faces matched on your Mac, a paper "dossier" card: name, actor, what is happening to them right now, last scene, and the actor's other work.
+- **⌘⇧E, Ask.** Type a question about the scene; get a short answer limited to what you have already watched.
+- **⌘⇧R, React.** Your chosen "watch buddy" personality gives a one-line take on the scene. On demand only, never on a timer.
+- **Spoiler shield.** Characters who first appear later are hidden; notes describe each person as of the start of your episode.
+- Reads your episode from your Netflix tab in Chrome, per-show library, relationship map, your own editable notes, add any show.
 
-## Install (one command)
+## Install
 
-You need: a Mac on macOS 14+, Chrome, [Xcode](https://apps.apple.com/app/xcode/id497799835) (free, App Store), and a free [TMDB API key](https://www.themoviedb.org/settings/api). An [Anthropic API key](https://console.anthropic.com/) is optional (needed for character notes and Ask).
+You need: macOS 14+, Chrome, [Xcode](https://apps.apple.com/app/xcode/id497799835) (free), Homebrew, and a free [TMDB API key](https://www.themoviedb.org/settings/api). An [Anthropic API key](https://console.anthropic.com/) is optional (notes, Ask, React).
 
 ```bash
 git clone https://github.com/Hydrazinev/goldfish-brain.git && cd goldfish-brain && ./install.sh
 ```
 
-The script installs the build tool, sets up the Python engine, downloads the face model, builds the app and installs it into Applications. Then follow the first-run screen: allow Screen Recording and Chrome access, paste your keys, add a show, open Netflix in Chrome and press ⌘⇧X.
+The script installs the build tool, sets up the Python engine, downloads the face model, builds the app and puts it in Applications. Keep the folder where it is: the app uses it as its engine. ⌘Q stops everything.
 
-Keep the cloned folder where it is — the app uses it as its engine. Quit (⌘Q) fully stops everything.
+## Architecture
+
+```
+mac/      Swift app (SwiftUI/AppKit): global hotkeys, ScreenCaptureKit capture, Chrome episode detection
+          (AppleScript), popup cards, engine supervisor. Registers shortcuts, never runs in the background after quit.
+src/      Python engine (FastAPI, localhost:8000): InsightFace buffalo_l + FAISS face matching, SQLite,
+          TMDB client, Claude calls (one module, src/llm.py), spoiler logic (src/spoiler.py, server.py)
+src/ui/   Web UI shown inside the app (library, add a show, settings, relationship map)
+site/     The website (static, GitHub Pages)
+tests/    pytest (407) · mac/CineIDTests (392 Swift tests)
+```
+
+**Flow for ⌘⇧X:** hotkey → capture → engine `/identify` (detect faces, FAISS search, one-to-one assignment so two faces cannot claim one character) → spoiler filter → card.
+
+## Decisions worth discussing
+
+- **Native shell + Python engine.** The OS-level parts (hotkeys, screen capture, non-activating panels over full-screen video) need Swift; the ML stack is Python. The app supervises the engine and reclaims orphans after crashes.
+- **Spoilers are a boundary, not a filter on output.** Every text the model or the viewer sees is built only from data at or before the viewer's position: notes "as of the start of the episode", TMDB summaries of earlier episodes only, bios redacted of later characters, current-episode debuts hidden until late playback. A separate audit found and fixed three leaks in this design.
+- **Privacy by construction.** Face matching never leaves the Mac. Ask and React send only your **Chrome window** (not the whole screen) after explicit consent, and only when you press the key. Keys live in the macOS Keychain. Quitting stops everything.
+- **Thread safety.** SQLite connections are per-thread after a shared connection crashed the engine under concurrent requests.
+- **Small details that matter at 3 a.m. on the sofa.** Instant "Looking…" card, press-again/Esc/click-away to dismiss, auto-fade that pauses on hover, a "Spoiler-safe up to S2E4" caption.
+
+## Accuracy, honestly
+
+Measured on synthetic frames (cast photos pasted into 1920×1080 frames, the test photo left out of the gallery), **not** real streaming frames. Details and method: [docs/ACCURACY.md](docs/ACCURACY.md).
+
+| Set | Correct | Wrong name | Not sure | False match on other-show faces |
+|---|---|---|---|---|
+| Easy (faces 120–400 px) | 100% | 0% | 0% | 0% of 1,380 |
+| Hard (35–110 px, blur, JPEG) | 78% | 0% | 22% | 0% of 5,080 |
+
+The percentage on a card is a similarity score, labelled "match strength", not the probability of being right. Real-world accuracy is not yet measured: the app logs (locally, no images) each identification and the "Wrong?" / "Missed someone" buttons save frames so it can be.
+
+## Known limits
+
+- Mac only; episode auto-detection is Netflix-in-Chrome only; small, dark or turned faces get missed.
+- Notes and Ask answers come from an AI model and can be wrong; Ask/React quality is not yet scored.
+- With player controls hidden the episode can't be read, so it falls back to the saved position.
+- Playback progress isn't passed on from the Mac app yet; the old Python Watch Buddy and `setup_show.py` are legacy.
+- Needs Xcode to build; no pre-built download.
 
 ## Privacy
 
-- Face matching, your library, notes and viewing position stay on your Mac.
-- API keys are stored in the macOS Keychain, never in the repo.
-- Nothing runs while the app is quit. Screenshots are taken only when you press a shortcut.
-- Sent over the network: TMDB requests (cast/episode info), episode summaries to Claude once when you add a show (to write notes), and — only for Ask, only after you tick a privacy box — your question and a screenshot to Claude.
-- No analytics, no accounts, no server operated by this project.
-
-## How it's built
-
-```
-mac/        Swift app (SwiftUI/AppKit): hotkeys, screen capture, Chrome episode detection, popup cards, engine supervisor
-src/        Python engine (FastAPI): InsightFace face recognition + FAISS, SQLite, TMDB, Claude via src/llm.py
-src/ui/     Web UI (library, add a show, settings, relationship map) shown inside the app
-site/       The website (static HTML, deployed with GitHub Pages)
-tests/      pytest suite (venv/bin/pytest tests -q)
-```
-
-Develop: `./scripts/run-mac.sh` builds and opens a debug copy; `cd mac && xcodegen && xcodebuild test -scheme CineID -destination 'platform=macOS' CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES` runs the Swift tests. (The internal Xcode target keeps its original name, CineID.) More in [CLAUDE.md](CLAUDE.md) and [docs/HOW_TO_TRY_MAC.md](docs/HOW_TO_TRY_MAC.md).
+Local: face matching, library, notes, positions, accuracy log. Network: TMDB (cast and episode info); episode summaries to Claude once per added show (to write notes); for Ask/React, your question and a screenshot of your Chrome window to Claude, only after you tick the privacy box. No analytics, no accounts, no server run by this project.
 
 ## Credits and notices
 
-- Character and actor data and photos: [TMDB](https://www.themoviedb.org). This product uses the TMDB API but is not endorsed or certified by TMDB.
-- Face recognition: [InsightFace](https://github.com/deepinsight/insightface) `buffalo_l`. The model is downloaded on your machine and has its own license (non-commercial research use) — check it before using this commercially.
+- Cast data and photos: [TMDB](https://www.themoviedb.org). Used under its API terms; not endorsed or certified by TMDB.
+- Face recognition: [InsightFace](https://github.com/deepinsight/insightface) `buffalo_l`, downloaded on your machine under its own (non-commercial research) license.
 - Not affiliated with Netflix. Show names, characters and images belong to their owners.
 
 ## License

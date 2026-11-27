@@ -48,6 +48,7 @@ final class AppEnvironment {
     private var flow: IdentifyFlow?
     private var hotKey: HotKey?
     private var askHotKey: HotKey?
+    private var reactHotKey: HotKey?
     private let askModel = AskModel()
     private var askFlow: AskFlow?
     private var askPresenter: AskPresenter?
@@ -61,6 +62,7 @@ final class AppEnvironment {
     private var startupProblem: String?
     private var hotKeyProblem: String?
     private var askHotKeyProblem: String?
+    private var reactHotKeyProblem: String?
     private var stopped = false
 
     /// Open the Goldfish Brain window (library / add a show / settings).
@@ -208,6 +210,15 @@ final class AppEnvironment {
         } catch {
             askHotKeyProblem = "Goldfish Brain couldn't register ⌘⇧E."
         }
+        do {
+            reactHotKey = try HotKey(combo: .react) { [weak self] in
+                Task { @MainActor in self?.reactHotKeyPressed() }
+            }
+        } catch HotKeyError.alreadyRegistered {
+            reactHotKeyProblem = "⌘⇧R is already used by another app, so Goldfish Brain can't listen for it."
+        } catch {
+            reactHotKeyProblem = "Goldfish Brain couldn't register ⌘⇧R."
+        }
     }
 
     /// ⌘⇧X: ignored while an identify runs; closes a result card; otherwise starts an identify.
@@ -232,6 +243,15 @@ final class AppEnvironment {
         askFlow?.hotKeyPressed()
     }
 
+    /// ⌘⇧R: the Watch Buddy reacts to the scene; the same key again closes the card.
+    private func reactHotKeyPressed() {
+        if askModel.phase == .hidden {
+            if let startupProblem { dismissIdentify(); return askModel.showMessage(startupProblem) }
+            dismissIdentify()
+        }
+        askFlow?.reactHotKeyPressed()
+    }
+
     /// Esc, a click outside, or the hotkey: close the identify card (and stop an identify still running).
     private func dismissIdentify() {
         if model.phase == .identifying { identifyTask?.cancel() }
@@ -248,6 +268,7 @@ final class AppEnvironment {
         let actions = StatusMenuController.Actions(
             identify: { [weak self] in self?.identifyHotKeyPressed() },
             ask: { [weak self] in self?.askHotKeyPressed() },
+            react: { [weak self] in self?.reactHotKeyPressed() },
             openUI: { [weak self] route in self?.webUI.open(route: route) },
             selectShow: { [weak self] id in self?.selectShow(id) },
             quit: { NSApp.terminate(nil) },
@@ -257,7 +278,7 @@ final class AppEnvironment {
 
     private func menuModel() -> StatusMenuModel {
         StatusMenuModel(status: supervisor?.status ?? .stopped, supervisorMessage: supervisor?.userMessage,
-                        state: engineState, problem: startupProblem ?? hotKeyProblem ?? askHotKeyProblem)
+                        state: engineState, problem: startupProblem ?? hotKeyProblem ?? askHotKeyProblem ?? reactHotKeyProblem)
     }
 
     private func refreshMenu() { statusMenu?.update(menuModel()) }

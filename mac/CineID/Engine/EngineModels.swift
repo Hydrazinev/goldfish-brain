@@ -64,6 +64,8 @@ struct EngineState: Decodable, Equatable {
     let current: CurrentShow
     let shows: [Show]
     let needsFirstRun: Bool
+    /// Settings → Watch Buddy "share only my Chrome window"; nil (older engine) means yes.
+    var shareOnlyWindow: Bool? = nil
 }
 
 enum EngineError: Error, Equatable {

@@ -6,6 +6,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     struct Actions {
         var identify: () -> Void
         var ask: () -> Void
+        var react: () -> Void
         var openUI: (String) -> Void
         var selectShow: (String) -> Void
         var quit: () -> Void
@@ -47,6 +48,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(shortcut(StatusMenuModel.identifyTitle, #selector(identify), key: "x"))
         menu.addItem(shortcut(StatusMenuModel.askTitle, #selector(ask), key: "e"))
+        menu.addItem(shortcut(StatusMenuModel.reactTitle, #selector(react), key: "r"))
         menu.addItem(.separator())
         menu.addItem(action("Open Goldfish Brain…", #selector(openLibrary)))
         menu.addItem(action("Add a Show…", #selector(openAdd)))
@@ -85,6 +87,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     @objc private func identify() { actions.identify() }
     @objc private func ask() { actions.ask() }
+    @objc private func react() { actions.react() }
     @objc private func openLibrary() { actions.openUI("") }
     @objc private func openAdd() { actions.openUI("add") }
     @objc private func selectShow(_ sender: NSMenuItem) {

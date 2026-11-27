@@ -20,6 +20,8 @@ struct AskCardView: View {
                 inputCard
             case .thinking(let question):
                 thinkingCard(question)
+            case .reacting:
+                reactingCard
             case .answer(let answer):
                 answerCard(answer)
             case .message(let text):
@@ -75,14 +77,32 @@ struct AskCardView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var reactingCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                DossierLabel(AskModel.defaultBuddyName)
+                Spacer(minLength: 4)
+                WorkingDots()
+            }
+            DossierRule()
+            Text(Self.thinkingText)
+                .font(DossierTheme.serif(18, .semibold))
+                .foregroundStyle(DossierTheme.ink)
+        }
+        .padding(.init(top: 18, leading: 18, bottom: 18, trailing: 18))
+        .frame(width: DossierLayout.cardWidth)
+        .background(DossierPaper())
+        .accessibilityElement(children: .combine)
+    }
+
     private func answerCard(_ answer: AskAnswer) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                DossierLabel(answer.refused ? "Holding back" : "Answer")
+                DossierLabel(answer.buddyName ?? (answer.refused ? "Holding back" : "Answer"))
                 Spacer(minLength: 4)
                 if answer.refused { DossierStamp(text: "NO SPOILERS") }
             }
-            questionText(answer.question)
+            if answer.buddyName == nil { questionText(answer.question) }
             DossierRule()
             Text(answer.text)
                 .font(DossierTheme.typewriter(13))

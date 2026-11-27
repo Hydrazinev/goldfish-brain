@@ -94,7 +94,7 @@ struct DossierFrontView: View {
         var parts = [card.name]
         if let actor = card.actor, !actor.isEmpty { parts.append("played by \(actor)") }
         if isLimited { parts.append(Self.limitedHint) } else {
-            parts.append("\(percent) percent match")
+            parts.append(DossierMatchBar.accessibilityText(percent: percent))
             if let status = card.status, !status.isEmpty { parts.append("status \(status)") }
             if let stampText { parts.append(stampText.lowercased()) }
         }

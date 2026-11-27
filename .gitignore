@@ -57,3 +57,6 @@ skills/
 CineID.app/
 assets/mascot-original.jpg
 ONBOARDING.md
+site/.openai/
+
+data/accuracy_log.jsonl

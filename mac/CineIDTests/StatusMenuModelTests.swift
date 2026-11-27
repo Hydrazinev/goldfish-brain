@@ -47,7 +47,7 @@ final class StatusMenuModelTests: XCTestCase {
         let m = StatusMenuModel(status: .ready, supervisorMessage: nil, state: state(shows: [], current: nil))
         XCTAssertEqual(m.showChoices, [])
         XCTAssertEqual(m.switchShowTitle, "Switch show (none set up yet)")
-        XCTAssertEqual(m.topLevelTitles, ["Ready — no show yet", "Identify who's on screen", "Ask a question", "Open Goldfish Brain…", "Add a Show…", "Switch show (none set up yet)", "Quit Goldfish Brain"])
+        XCTAssertEqual(m.topLevelTitles, ["Ready — no show yet", "Identify who's on screen", "Ask a question", "React to this scene", "Open Goldfish Brain…", "Add a Show…", "Switch show (none set up yet)", "Quit Goldfish Brain"])
     }
 
     func testItemsWithOneShow() {

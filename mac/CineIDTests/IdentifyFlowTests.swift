@@ -46,6 +46,7 @@ private final class FakeCapture: ScreenCapturing {
     private(set) var captures = 0
     func hasPermission() -> Bool { permission }
     func capture() async throws -> CGImage { captures += 1; return image }
+    func captureChromeWindow() async throws -> CGImage { fatalError("⌘⇧X keeps the whole-display capture") }
 }
 
 private struct FakeResolver: EpisodeResolving {

@@ -49,6 +49,7 @@ struct StatusMenuModel: Equatable {
     /// Titles of the top-level items, in order (the first is the status line).
     static let identifyTitle = "Identify who's on screen"
     static let askTitle = "Ask a question"
+    static let reactTitle = "React to this scene"
 
-    var topLevelTitles: [String] { [firstLine, Self.identifyTitle, Self.askTitle, "Open Goldfish Brain…", "Add a Show…", switchShowTitle, "Quit Goldfish Brain"] }
+    var topLevelTitles: [String] { [firstLine, Self.identifyTitle, Self.askTitle, Self.reactTitle, "Open Goldfish Brain…", "Add a Show…", switchShowTitle, "Quit Goldfish Brain"] }
 }

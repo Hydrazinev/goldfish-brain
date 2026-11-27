@@ -41,6 +41,17 @@ final class AskClientTests: XCTestCase {
         XCTAssertTrue(json["progress"] is NSNull)
     }
 
+    func testReactRequestSendsModeAndTheBuddyNameIsParsed() async throws {
+        let transport = StubTransport()
+        transport.body = Data(#"{"answer":"Gus again.","safe_up_to":"S3E7","refused":false,"buddy_name":" Sam "}"#.utf8)
+        let req = AskRequest(question: "", jpeg: Data([1]), showId: "bb", season: 3, episode: 7, progress: nil, mode: .react)
+        let response = try await AskClient(transport: transport).ask(req)
+        XCTAssertEqual(response.buddyName, "Sam")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(transport.requests.first?.httpBody)) as? [String: Any])
+        XCTAssertEqual(json["mode"] as? String, "react")
+        XCTAssertEqual(json["question"] as? String, "")
+    }
+
     func testProgressIsSentWhenKnown() throws {
         let req = try AskClient().makeURLRequest(askRequest(progress: 0.25))
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(req.httpBody)) as? [String: Any])
@@ -265,7 +276,24 @@ final class AskModelTests: XCTestCase {
         XCTAssertEqual(model.draft, "")
     }
 
+    func testReactingFlowAndFade() {
+        model.openReacting()
+        XCTAssertEqual(model.phase, .reacting)
+        scheduler.advance(by: 500)
+        XCTAssertEqual(model.phase, .reacting, "thinking never fades")
+        model.showReaction(response: AskResponse(answer: "Look at that suit.", safeUpTo: SafePosition(season: 1, episode: 2), refused: false, buddyName: "Sam"))
+        guard case .answer(let a) = model.phase else { return XCTFail() }
+        XCTAssertEqual(a.buddyName, "Sam")
+        XCTAssertEqual(a.safeUpTo, "S1E2")
+        scheduler.advance(by: 20.1)
+        XCTAssertEqual(model.phase, .hidden)
+        model.showReaction(response: AskResponse(answer: "x", safeUpTo: nil, refused: false))
+        guard case .answer(let b) = model.phase else { return XCTFail() }
+        XCTAssertEqual(b.buddyName, "Watch Buddy")
+    }
+
     func testHotkeyDecision() {
+        XCTAssertEqual(AskHotkeyAction.decide(phase: .reacting), .dismiss)
         XCTAssertEqual(AskHotkeyAction.decide(phase: .hidden), .start)
         for phase in [AskPhase.input, .thinking(question: "q"), .message("m"),
                       .answer(AskAnswer(question: "q", text: "a", refused: false, safeUpTo: nil))] {
@@ -278,10 +306,12 @@ final class AskModelTests: XCTestCase {
 
 private final class FakeEngine: EngineAPI {
     var showId: String? = "bb"
+    var shareOnlyWindow: Bool? = nil
     func health() async throws -> Bool { true }
     func state() async throws -> EngineState {
         EngineState(setup: .init(tmdbKey: true, anthropicKey: true),
-                    current: .init(showId: showId, showName: "Breaking Bad", season: 4, episode: 4), shows: [], needsFirstRun: false)
+                    current: .init(showId: showId, showName: "Breaking Bad", season: 4, episode: 4), shows: [], needsFirstRun: false,
+                    shareOnlyWindow: shareOnlyWindow)
     }
     func identify(jpeg: Data, showId: String, season: Int, episode: Int) async throws -> IdentifyResponse { fatalError() }
     func setPosition(showId: String, season: Int, episode: Int) async throws {}
@@ -300,8 +330,16 @@ private final class FakeCapture: ScreenCapturing {
     var gray: UInt8 = 128
     private(set) var captures = 0
     private(set) var permissionRequests = 0
+    private(set) var windowCaptures = 0
+    var chromeWindowOpen = true
     func hasPermission() -> Bool { permission }
     func requestPermission() -> Bool { permissionRequests += 1; return permission }
+    /// `captures` counts every screenshot; `windowCaptures` only the Chrome-window ones.
+    func captureChromeWindow() async throws -> CGImage {
+        windowCaptures += 1
+        guard chromeWindowOpen else { captures += 1; throw CaptureError.noChromeWindow }
+        return try await capture()
+    }
     func capture() async throws -> CGImage {
         captures += 1
         let w = 64, h = 36
@@ -432,5 +470,92 @@ final class AskFlowTests: XCTestCase {
         quick.hotKeyPressed(); model.draft = "q"; quick.submit()
         await settle { self.isMessage() }
         XCTAssertEqual(model.phase, .message(FriendlyError.text(.timeout)))
+    }
+
+    // MARK: react (⌘⇧R)
+
+    func testReactSendsAtOnceWithNoQuestionAndShowsTheBuddyName() async throws {
+        client.result = .success(AskResponse(answer: "Nice suit.", safeUpTo: SafePosition(season: 3, episode: 7),
+                                             refused: false, buddyName: "Sam"))
+        flow.reactHotKeyPressed()
+        XCTAssertEqual(model.phase, .reacting, "the card is up at once, no text field")
+        await settle { self.isAnswer() }
+        guard case .answer(let answer) = model.phase else { return XCTFail("got \(model.phase)") }
+        XCTAssertEqual(answer.buddyName, "Sam")
+        XCTAssertEqual(answer.text, "Nice suit.")
+        let sent = try XCTUnwrap(client.requests.first)
+        XCTAssertEqual(sent.mode, .react)
+        XCTAssertEqual(sent.question, "")
+        XCTAssertEqual([sent.season, sent.episode], [3, 7])
+        XCTAssertGreaterThan(sent.jpeg.count, 100)
+        XCTAssertEqual(capture.captures, 1)
+    }
+
+    func testAskAndReactShareOnlyTheChromeWindowByDefault() async {
+        flow.hotKeyPressed()
+        await settle { self.capture.captures == 1 }
+        XCTAssertEqual(capture.windowCaptures, 1, "the upload path never takes the whole display")
+        model.dismiss()
+        flow.reactHotKeyPressed()
+        await settle { self.capture.captures == 2 }
+        XCTAssertEqual(capture.windowCaptures, 2)
+    }
+
+    func testNoChromeWindowShowsTheFriendlyMessageAndNeverFallsBackToTheWholeDisplay() async {
+        capture.chromeWindowOpen = false
+        flow.hotKeyPressed()
+        await settle { self.isMessage() }
+        XCTAssertEqual(model.phase, .message("Open Netflix in Chrome first — Goldfish Brain only shares your Chrome window."))
+        XCTAssertTrue(client.requests.isEmpty)
+        XCTAssertEqual(capture.captures, capture.windowCaptures, "no whole-display capture happened")
+
+        model.dismiss()
+        flow.reactHotKeyPressed()
+        await settle { self.isMessage() }
+        XCTAssertEqual(model.phase, .message(FriendlyError.text(.noChromeWindow)))
+        XCTAssertTrue(client.requests.isEmpty)
+        XCTAssertEqual(capture.captures, capture.windowCaptures)
+    }
+
+    func testTheOwnerCanAllowTheWholeDisplay() async {
+        engine.shareOnlyWindow = false
+        capture.chromeWindowOpen = false
+        flow.reactHotKeyPressed()
+        await settle { self.isAnswer() }
+        XCTAssertTrue(isAnswer())
+        XCTAssertEqual(capture.windowCaptures, 0)
+        XCTAssertEqual(capture.captures, 1)
+    }
+
+    func testReactAgainClosesAndALateReactionDoesNotReopen() async {
+        client.delay = 0.2
+        flow.reactHotKeyPressed()
+        flow.reactHotKeyPressed()
+        XCTAssertEqual(model.phase, .hidden)
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertEqual(model.phase, .hidden)
+    }
+
+    func testReactProblemsBecomeMessages() async {
+        capture.gray = 0
+        flow.reactHotKeyPressed()
+        await settle { self.isMessage() }
+        XCTAssertEqual(model.phase, .message(FriendlyError.text(.blackFrame)))
+        XCTAssertTrue(client.requests.isEmpty)
+
+        model.dismiss(); capture.gray = 128; client.result = .failure(AskError.needsDisclosure)
+        flow.reactHotKeyPressed()
+        await settle { self.isMessage() && self.client.requests.count == 1 }
+        XCTAssertEqual(model.phase, .message(AskFriendlyError.needsDisclosure))
+    }
+
+    func testReactNeedsPermissionAndEngine() {
+        capture.permission = false
+        flow.reactHotKeyPressed()
+        XCTAssertEqual(model.phase, .message(FriendlyError.text(.noScreenPermission)))
+        model.dismiss(); capture.permission = true; status.status = .warmingUp(since: Date())
+        flow.reactHotKeyPressed()
+        XCTAssertEqual(model.phase, .message(FriendlyError.text(.engineWarmingUp)))
+        XCTAssertEqual(capture.captures, 0)
     }
 }

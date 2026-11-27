@@ -24,7 +24,7 @@ src/
   chrome_scripts.py    — AppleScript/JS snippets to read the Netflix tab (episode detection)
   static_files.py      — NoCacheStaticFiles (web UI must never be served from WKWebView cache)
   edit_menu.py         — Edit menu for the legacy PyObjC window
-  ask.py               — (new) ⌘⇧E "Ask": spoiler-safe answer about the current scene (Sonnet 5.5)
+  ask.py               — (new) ⌘⇧E "Ask": spoiler-safe answer about the current scene (Sonnet 5.5); `mode: "react"` = ⌘⇧R Watch Buddy reaction (persona from config.json `buddy`, last 3 kept in memory, tests/test_react.py)
   config_store.py      — atomic config.json writes (refuses unreadable files), .env parsing, per-show positions
   keystore.py          — API keys in macOS Keychain (service "cineid"), env / .env fallback
   key_check.py         — validates TMDB / Anthropic keys with one cheap request
@@ -139,7 +139,7 @@ Old arc data without arc_type falls back to keyword detection (`_detect_arc_type
 - Persona configured via menu bar → "Watch Buddy Settings…" (saved to `config.json`)
 - Personalities: `hype` / `film_nerd` / `chill` / `mac` (default)
 - Trigger modes (`trigger_mode` in config): `audio` = silence detection, `timer` = fixed interval (no mic)
-- `cooldown_minutes: 0` means "as often as allowed" — floored at 10s in audio mode and 3 min in timer mode (`_effective_cooldown` in buddy.py); each trigger costs a Claude Haiku call. Watch Buddy exists only in the legacy Python app; the Mac app has none (the owner prefers on-demand ⌘⇧E Ask over auto-triggers)
+- `cooldown_minutes: 0` means "as often as allowed" — floored at 10s in audio mode and 3 min in timer mode (`_effective_cooldown` in buddy.py); each trigger costs a Claude Haiku call. Watch Buddy exists only in the legacy Python app; the Mac app has no auto-triggers (the owner prefers on-demand); its Watch Buddy is ⌘⇧R "React" (AskFlow.reactHotKeyPressed → POST /api/ask mode=react, shown in the Ask card)
 - **Audio capture:** `sounddevice` reads the default input device (mic by default). To monitor show audio, install [BlackHole 2ch](https://existential.audio/blackhole/) and route system output through it. See docs/HOW_TO_TRY.md for setup steps.
 - Spoiler shield: only characters introduced ≤ current episode are included in the prompt
 
@@ -210,6 +210,10 @@ SwiftUI/AppKit rewrite of the shell; the Python engine (`src/server.py`, port 80
 - XcodeGen project (`mac/project.yml`); never edit the .xcodeproj. Own signing team goes in untracked `mac/Config/Local.xcconfig`.
 - `Flow/IdentifyFlow.swift` is the ⌘⇧X pipeline (permission, engine ready, capture, black frame, episode, identify, popup, 30 s engine timeout). `App/AppEnvironment.swift` wires supervisor, hotkey, popup and menu; nothing starts under XCTest.
 - Do not run the Python app and the Mac app together (same port and hotkey).
+- Window-only capture: Ask/React upload only the front-most Chrome window (`ScreenCaptureKitCapture.captureChromeWindow`, `ChromeWindowPicker`), never the whole display; no Chrome window means a friendly message, not a fallback. `buddy.share_only_window` (exposed as `share_only_window` in `/api/state`, default true) can allow the whole display; ⌘⇧X keeps whole-display capture (it never uploads).
+- React memory (`ask._recent_reactions`) is keyed by show_id and stamped with (season, episode); entries from a later position (rewind) or another show never reach a prompt.
+- `characters.bio_user_edited` is set when the notes editor saves a changed bio; `populate_metadata` then keeps that bio (and first appearance) when notes are regenerated.
+- `data/last_capture.jpg` is written by the engine on every `/identify` (local, git-ignored, best effort) so feedback reports attach the frame that was identified.
 - Regular Dock app (Quit ⌘Q fully stops the engine, mic/hotkeys: privacy requirement). Opens the web UI in a WKWebView (cache cleared on open) at http://127.0.0.1:8000/ui/. Install: `./scripts/install-mac.sh` (signed Release into /Applications).
 - Popup = non-activating NSPanel "dossier" card (front/back, "1 of N" chip for several faces). Episode comes from Chrome (AppleScript over ALL windows for the netflix.com/watch tab, never `front window`, never launches Chrome), season via `/api/episodes/season`, fallback OCR/stored position. Known gap: with player controls hidden the episode can't be read (mouse nudge not built).
 - Logs: ~/Library/Logs/CineID/app.log (+ last_capture.jpg); `-identifyNow` launch arg is a diagnostic.
@@ -223,3 +227,4 @@ SwiftUI/AppKit rewrite of the shell; the Python engine (`src/server.py`, port 80
 - Popup micro-UX rules: instant "Looking…" state, same hotkey / Esc / click-away dismiss, auto-fade 12 s (20 s for Ask) paused on hover, "Spoiler-safe up to SxEy" caption.
 - Concurrency: `CharacterDB` uses per-thread SQLite connections (a shared connection segfaulted the engine). `/api/state` permission probe is opt-in (`?permissions=1`) and cached 10 s.
 - LLM gotchas: Haiku 5.5 → thinking `disabled`; Sonnet 5.5 rejects `disabled` and needs `between_tools`; use structured outputs (`ask_json(schema=)`) because Haiku answers in prose when unsure.
+- Accuracy: engine logs data/accuracy_log.jsonl (no images; GET /api/accuracy/summary); margin rule CINEID_MIN_MARGIN defaults 0 (benchmark showed no wrong names); ingest drops outlier reference photos (src/photo_clean.py, audit with src/audit_photos.py); method + numbers in docs/ACCURACY.md; popup label is 'match strength'.

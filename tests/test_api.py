@@ -135,6 +135,14 @@ def test_state_lists_ready_shows_with_positions_and_poster():
     assert body["current"]["show_name"] == "Breaking Bad"
 
 
+def test_state_reports_share_only_window_defaulting_to_true():
+    assert Env().client.get("/api/state").json()["share_only_window"] is True
+    e = Env(config={"buddy": {"share_only_window": False}})
+    assert e.client.get("/api/state").json()["share_only_window"] is False
+    e = Env(config={"buddy": {"share_only_window": True}})
+    assert e.client.get("/api/state").json()["share_only_window"] is True
+
+
 def test_state_never_contains_key_values():
     e = Env(keys={"TMDB_API_KEY": "SECRET-TMDB", "ANTHROPIC_API_KEY": "SECRET-ANT"})
     text = e.client.get("/api/state").text

@@ -327,3 +327,37 @@ def test_limited_result_keeps_identity_but_drops_story_details():
     for k in ("status", "arc_type", "current_arc", "last_seen_description",
               "relationship_summary", "first_seen_season", "last_seen_season"):
         assert out[k] is None, k
+
+
+# ── /identify keeps the latest frame for feedback reports ───────────────────
+
+def _jpeg_b64():
+    import base64
+    import cv2
+    import numpy as np
+    ok, buf = cv2.imencode(".jpg", np.full((8, 8, 3), 90, dtype=np.uint8))
+    assert ok
+    return base64.b64encode(buf.tobytes()).decode(), buf.tobytes()
+
+
+def test_identify_saves_the_latest_frame_as_last_capture(tmp_path, monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+    s = _server()
+    monkeypatch.setattr(s, "_DATA_DIR", tmp_path)
+    b64, raw = _jpeg_b64()
+    with pytest.raises(HTTPException):          # show not loaded: the frame is kept anyway
+        s.identify(s.IdentifyRequest(image=b64, show_id="nope-xyz", season=1, episode=1))
+    assert (tmp_path / "last_capture.jpg").read_bytes() == raw
+    b64b, _ = _jpeg_b64()
+    s._save_last_capture(b64b, None, tmp_path)   # overwritten, no leftover temp file
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["last_capture.jpg"]
+
+
+def test_saving_the_capture_never_fails_the_request(tmp_path):
+    s = _server()
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    b64, _ = _jpeg_b64()
+    s._save_last_capture(b64, None, blocker / "sub")      # unwritable location
+    s._save_last_capture("not base64!!", None, tmp_path)  # garbage

@@ -41,7 +41,15 @@ No Accessibility permission is needed for the hotkey.
 - **⌘⇧X** identify who is on screen. Pressed again while a result card is up, it closes the card.
 - **⌘⇧E** ask a question about the scene (needs the Claude key and the Watch Buddy privacy box ticked: Settings → Watch Buddy).
   Type, **Return** sends, **Esc** cancels, **↑** recalls the last question (kept in memory only). Same key again closes it.
+- **⌘⇧R** React: your Watch Buddy (name and personality from Settings → Watch Buddy) reacts to the scene in one short,
+  spoiler-safe line, in the same card. No typing; same privacy box and Claude key as Ask. Same key again closes it.
 - On a character card: "Wrong?" / "Missed someone" send a correction to the engine. The card also says "Spoiler-safe up to S3E7".
+
+**What is uploaded:** Ask (⌘⇧E) and React (⌘⇧R) send a screenshot of the front-most Google Chrome window only (not
+other apps, not the rest of the display) to Anthropic, and only when you press the key. With no Chrome window open they
+show "Open Netflix in Chrome first — Goldfish Brain only shares your Chrome window." and send nothing. Turning off
+"Share only the Chrome window" in Settings → Watch Buddy allows the whole display. ⌘⇧X always looks at the whole
+display but never uploads it (faces are matched on the Mac).
 
 ## Checklist for ⌘⇧E, Esc, click-away and corrections (real screen only)
 11. Netflix full screen in Chrome, playing. Press **⌘⇧E**: the question card appears top-right, you can type at once,
@@ -52,7 +60,13 @@ No Accessibility permission is needed for the hotkey.
     open; leaving starts the 12 s countdown again. Ask answers fade after 20 s.
 15. While a card is up, Esc closes it (Goldfish Brain claims Esc only while a card is visible, so Chrome does not see it then).
 16. "Wrong?" shows "Thanks — noted" for ~1.5 s (needs the engine's /api/feedback).
+16b. Put another app's window (Messages, Mail) next to Chrome, press ⌘⇧E or ⌘⇧R, and check the screenshot the engine
+    received (`data/last_capture.jpg` is only for ⌘⇧X): the upload must contain only the Chrome window. Quit Chrome
+    (or minimise it): the card says "Open Netflix in Chrome first…" and nothing is sent.
 17. ⌘⇧E without the Watch Buddy privacy box ticked: friendly message pointing to Settings → Watch Buddy.
+18. Netflix full screen in Chrome, playing. Press **⌘⇧R**: the card shows "Watch Buddy" + "Thinking…", then a line headed by
+    your buddy's name that mentions something visible in the frame; video keeps playing. Press ⌘⇧R again a few times:
+    reactions do not repeat. Esc / click-away / ⌘⇧R again close it; it fades after 20 s (paused on hover).
 
 ## Not verified / not built yet
 - Everything in the checklist above (full-screen, Spaces, focus, permission prompts, status item, ⌘V in the web window).

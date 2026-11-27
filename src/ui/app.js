@@ -401,9 +401,30 @@ function showCard(s) {
     const r = await api("/position", { method: "POST", body: { show_id: s.show_id, season, episode } });
     toast(r.data.ok ? "Saved: S" + String(season).padStart(2, "0") + "E" + String(episode).padStart(2, "0") : r.data.message);
   }, 400);
+  // Real number of seasons / episodes (from TMDB) so the counters can't go past what exists.
+  let seasons = null;
+  const inputs = {};
+  const maxFor = (key) => {
+    if (!seasons) return Infinity;
+    if (key === "season") return Math.max(1, ...Object.keys(seasons).map(Number));
+    return seasons[String(s.season)] || Infinity;
+  };
+  const sync = () => {
+    s.season = Math.min(Math.max(1, s.season | 0 || 1), maxFor("season"));
+    s.episode = Math.min(Math.max(1, s.episode | 0 || 1), maxFor("episode"));
+    for (const k of ["season", "episode"]) {
+      const m = maxFor(k);
+      inputs[k].value = s[k];
+      if (m === Infinity) inputs[k].removeAttribute("max"); else inputs[k].max = m;
+    }
+  };
+  api("/shows/" + encodeURIComponent(s.show_id) + "/structure").then(r => {
+    if (r.ok && r.data.seasons && Object.keys(r.data.seasons).length) { seasons = r.data.seasons; sync(); }
+  });
   const mk = (label, key) => {
     const input = h("input", { type: "number", min: 1, value: s[key], "aria-label": label + " for " + s.show_name });
-    const set = (v) => { s[key] = Math.max(1, v | 0 || 1); input.value = s[key]; save(s.season, s.episode); };
+    inputs[key] = input;
+    const set = (v) => { s[key] = Math.max(1, v | 0 || 1); sync(); save(s.season, s.episode); };
     input.addEventListener("change", () => set(parseInt(input.value, 10)));
     return h("div", { class: "stepper" }, h("span", { class: "lbl", text: label }),
       h("button", { "aria-label": "Previous " + label.toLowerCase(), onclick: () => set(s[key] - 1), text: "−" }), input,
@@ -566,20 +587,15 @@ async function viewSettings() {
   const f = {
     name: h("input", { type: "text", value: b.name, id: "b-name", maxlength: 24 }),
     personality: h("select", { id: "b-pers" }, personalities.map(p => h("option", { value: p, text: p.replace("_", " ") }))),
-    voice: h("input", { type: "text", value: b.voice, id: "b-voice", list: "voices" }),
-    cooldown: h("input", { type: "number", min: 0, step: 1, value: b.cooldown_minutes, id: "b-cool" }),
-    mode: h("select", { id: "b-mode" }, h("option", { value: "audio", text: "At quiet moments (uses mic)" }), h("option", { value: "timer", text: "Every few minutes (no mic)" })),
-    enabled: h("input", { type: "checkbox", id: "b-en", checked: b.enabled }),
     only: h("input", { type: "checkbox", id: "b-only", checked: b.share_only_window }),
     ack: h("input", { type: "checkbox", id: "b-ack", checked: b.disclosure_ack }),
   };
-  f.personality.value = b.personality; f.mode.value = b.trigger_mode;
+  f.personality.value = b.personality;
   const msg = h("div", { class: "msg", role: "status" });
   const save = h("button", { class: "primary", text: "Save", onclick: async () => {
     const res = await api("/buddy", { method: "POST", body: {
-      name: f.name.value, personality: f.personality.value, voice: f.voice.value,
-      cooldown_minutes: parseFloat(f.cooldown.value || "0"), trigger_mode: f.mode.value,
-      enabled: f.enabled.checked, share_only_window: f.only.checked, disclosure_ack: f.ack.checked } });
+      name: f.name.value, personality: f.personality.value,
+      share_only_window: f.only.checked, disclosure_ack: f.ack.checked } });
     msg.className = "msg " + (res.data.ok ? "ok" : "bad"); msg.textContent = res.data.ok ? "✓ Saved" : res.data.message;
     if (res.data.ok) toast("Settings saved");
   } });
@@ -596,7 +612,7 @@ async function viewSettings() {
   function keyEditor(name) {
     const cfg = name === "TMDB_API_KEY"
       ? { name, label: "TMDB key", helpText: "Free.", linkTarget: "tmdb_key_page", linkText: "Get a free key", isSet: S.setup.tmdb_key }
-      : { name, label: "Anthropic (Claude) key", optional: true, helpText: "For character notes and Watch Buddy (Claude Haiku).", linkTarget: "anthropic_key_page", linkText: "Get a key", isSet: S.setup.anthropic_key };
+      : { name, label: "Anthropic (Claude) key", optional: true, helpText: "For character notes, Ask and your Watch Buddy (Claude).", linkTarget: "anthropic_key_page", linkText: "Get a key", isSet: S.setup.anthropic_key };
     keyField.onSaved = () => drawKeys();
     keysHost.replaceChildren(h("h2", { text: "Keys" }), keyField(cfg), h("button", { class: "link", onclick: drawKeys, text: "Done" }));
   }
@@ -609,17 +625,12 @@ async function viewSettings() {
         perm.screen_recording === true ? h("span", { class: "pill ok", text: "✓ Allowed" })
           : h("button", { onclick: () => api("/open", { method: "POST", body: { target: "screen_recording" } }), text: "Open System Settings" }))),
     h("div", { class: "card stack" }, h("h2", { text: "Watch Buddy" }),
-      !b.disclosure_ack && h("div", { class: "banner", text: "Watch Buddy is paused until you tick the privacy box below." }),
+      h("p", { class: "help", text: "Press \u2318\u21e7R for your buddy\u2019s take. Ask (\u2318\u21e7E) and React send a screenshot of your Chrome window to Anthropic only when you press the key." }),
+      !b.disclosure_ack && h("div", { class: "banner", text: "Ask and React are paused until you tick the privacy box below." }),
       h("div", {}, h("label", { class: "field", for: "b-name", text: "Name" }), f.name),
       h("div", {}, h("label", { class: "field", for: "b-pers", text: "Personality" }), f.personality),
-      h("div", {}, h("label", { class: "field", for: "b-voice", text: "Voice" }), f.voice,
-        h("datalist", { id: "voices" }, ["Samantha", "Alex", "Daniel", "Karen", "Moira", "Tessa", "Fred"].map(v => h("option", { value: v }))),
-        h("div", { class: "help", text: "Any macOS voice name (System Settings → Accessibility → Spoken Content)." })),
-      h("div", {}, h("label", { class: "field", for: "b-mode", text: "Chime in" }), f.mode, h("div", { class: "help", text: "“Quiet moments” listens to your Mac’s input device — use BlackHole to hear the show itself (see ONBOARDING.md)." })),
-      h("div", {}, h("label", { class: "field", for: "b-cool", text: "At most once every (minutes)" }), f.cooldown, h("div", { class: "help", text: "0 = as often as allowed. Each reaction is one small, cheap Claude Haiku call." })),
-      h("label", { class: "check", for: "b-en" }, f.enabled, h("span", { text: "Watch Buddy is on" })),
-      h("label", { class: "check", for: "b-only" }, f.only, h("span", {}, h("strong", { text: "Share only the browser window" }), h("div", { class: "help", text: "Recommended. Otherwise the whole desktop is sent." }))),
-      h("label", { class: "check", for: "b-ack" }, f.ack, h("span", {}, h("strong", { text: "I understand Buddy sends a screenshot to Anthropic (Claude)" }), h("div", { class: "help", text: "To react to the scene, Watch Buddy uploads a screenshot to Anthropic each time it speaks." }))),
+      h("label", { class: "check", for: "b-only" }, f.only, h("span", {}, h("strong", { text: "Share only my Chrome window" }), h("div", { class: "help", text: "Recommended. Other apps and the rest of your screen are never uploaded. If you turn this off, Ask and React send the whole display." }))),
+      h("label", { class: "check", for: "b-ack" }, f.ack, h("span", {}, h("strong", { text: "I understand Ask and React send a screenshot to Anthropic (Claude)" }), h("div", { class: "help", text: "Only when you press the key: a screenshot of your Chrome window (the whole display if you turned the option above off) goes to Anthropic with your question." }))),
       h("div", { class: "row" }, save), msg)));
 }
 

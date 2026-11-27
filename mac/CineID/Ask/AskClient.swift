@@ -1,5 +1,9 @@
 import Foundation
 
+enum AskMode: String, Equatable {
+    case ask, react
+}
+
 /// What `POST /api/ask` needs. The screenshot is the same JPEG the identify path produces.
 struct AskRequest {
     let question: String
@@ -9,6 +13,8 @@ struct AskRequest {
     let episode: Int
     /// How far through the episode (0...1) when known; sent as null otherwise.
     let progress: Double?
+    /// `.react`: the Watch Buddy reacts to the frame; the question is ignored by the engine.
+    var mode: AskMode = .ask
 }
 
 /// "Spoiler-safe up to S3E7": how far the engine allowed itself to go in this answer.
@@ -45,6 +51,8 @@ struct AskResponse: Equatable {
     let safeUpTo: SafePosition?
     /// True when the engine declined (the answer would spoil, or the question is out of scope).
     let refused: Bool
+    /// The Watch Buddy's name; only sent for a reaction.
+    var buddyName: String? = nil
 
     /// Nil when the body isn't an object with a non-empty `answer`.
     static func parse(_ data: Data) -> AskResponse? {
@@ -52,7 +60,11 @@ struct AskResponse: Equatable {
               let answer = (object["answer"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !answer.isEmpty else { return nil }
         return AskResponse(answer: answer, safeUpTo: SafePosition.parse(object["safe_up_to"]),
-                           refused: (object["refused"] as? Bool) ?? false)
+                           refused: (object["refused"] as? Bool) ?? false,
+                           buddyName: (object["buddy_name"] as? String).flatMap { name in
+                               let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                               return t.isEmpty ? nil : t
+                           })
     }
 }
 
@@ -97,7 +109,7 @@ final class AskClient: AskAPI {
         req.httpMethod = "POST"
         req.timeoutInterval = Self.timeout
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "question": ask.question,
             "image_b64": ask.jpeg.base64EncodedString(),
             "show_id": ask.showId,
@@ -105,6 +117,7 @@ final class AskClient: AskAPI {
             "episode": ask.episode,
             "progress": ask.progress.map { $0 as Any } ?? NSNull(),
         ]
+        if ask.mode == .react { body["mode"] = ask.mode.rawValue }   // only sent for a reaction: the Ask body is unchanged
         do { req.httpBody = try JSONSerialization.data(withJSONObject: body) } catch { throw AskError.decoding }
         return req
     }
@@ -143,7 +156,7 @@ final class AskClient: AskAPI {
 
 /// Plain-language text for an ask failure. The engine's own text is used only when it reads like a sentence.
 enum AskFriendlyError {
-    static let needsDisclosure = "Asking sends a screenshot of your screen to Claude, so Goldfish Brain needs your OK first. Open Goldfish Brain → Settings → Watch Buddy and tick the privacy box, then ask again."
+    static let needsDisclosure = "Ask and React send a screenshot of your Chrome window to Claude (only when you press the key), so Goldfish Brain needs your OK first. Open Goldfish Brain → Settings → Watch Buddy and tick the privacy box, then ask again."
 
     static func text(_ error: AskError, serverAge: TimeInterval = .infinity) -> String {
         switch error {

@@ -5,6 +5,8 @@ import Foundation
 enum FlowFailure: Equatable {
     case blackFrame
     case noScreenPermission
+    /// Ask/React share only the Chrome window, and there is none to share.
+    case noChromeWindow
     case engineWarmingUp
     case engineNotResponding
     case showNotSetUp(String?)
@@ -43,6 +45,8 @@ enum FriendlyError {
             return "Netflix video is hidden from screenshots.\nIn Chrome: Settings → System → turn off “Use graphics acceleration when available”, then reopen Chrome."
         case .noScreenPermission:
             return "Goldfish Brain needs Screen Recording permission. Open System Settings → Privacy & Security → Screen Recording and turn on Goldfish Brain."
+        case .noChromeWindow:
+            return "Open Netflix in Chrome first — Goldfish Brain only shares your Chrome window."
         case .engineWarmingUp:
             return "Goldfish Brain is warming up — try again in a few seconds."
         case .engineNotResponding:

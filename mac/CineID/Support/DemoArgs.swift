@@ -49,7 +49,7 @@ enum PopupScenario: String, CaseIterable {
 
 /// A canned Ask card state for `-demoAsk <name>` previews and snapshot tests.
 enum AskScenario: String, CaseIterable {
-    case input, thinking, answer, refused, longAnswer, needsDisclosure, blackFrame
+    case input, thinking, answer, refused, longAnswer, needsDisclosure, blackFrame, reactThinking, react
 
     @MainActor
     func makeModel() -> AskModel {
@@ -75,6 +75,12 @@ enum AskScenario: String, CaseIterable {
             model.showAnswer(question: q, response: AskResponse(
                 answer: "Up to this point the money is a retainer: the lawyer is paid to keep the harbour master's name off the warehouse leases. The ledger she burns on the pier is the only record that links the two of them, and the audit that is coming would have found it. That is why she is destroying it one page at a time rather than handing it over.",
                 safeUpTo: SafePosition(season: 4, episode: 4), refused: false))
+        case .reactThinking: model.openReacting()
+        case .react:
+            model.openReacting()
+            model.showReaction(response: AskResponse(
+                answer: "Pausing here— that grey suit and the calm hand on the rail say Gus is the one actually in control of this room.",
+                safeUpTo: SafePosition(season: 4, episode: 4), refused: false, buddyName: "Alex"))
         case .needsDisclosure: model.showMessage(AskFriendlyError.needsDisclosure)
         case .blackFrame: model.showMessage(FriendlyError.text(.blackFrame))
         }

@@ -51,7 +51,7 @@ final class FriendlyErrorTests: XCTestCase {
 
     func testNoCaseContainsRawErrorMarkers() {
         let all: [FlowFailure] = [.blackFrame, .noScreenPermission, .engineWarmingUp, .engineNotResponding,
-                                  .showNotSetUp(nil), .showNotSetUp("X"), .serverError, .timeout, .other]
+                                  .noChromeWindow, .showNotSetUp(nil), .showNotSetUp("X"), .serverError, .timeout, .other]
         for f in all {
             let t = FriendlyError.text(f)
             for marker in ["Error:", "Exception", "Traceback"] {

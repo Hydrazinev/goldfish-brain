@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from recogniser import FaceRecogniser, FaceIndex
 from database import CharacterDB
 from job_events import emit
+import photo_clean
 
 _ROOT = Path(__file__).parent.parent
 _DATA_DIR = _ROOT / "data"
@@ -220,6 +221,26 @@ def _filter_images(char_dir: Path, recogniser: FaceRecogniser) -> list[Path]:
     return clean
 
 
+def _drop_outlier_photos(clean_images: list[Path], recogniser, character_name: str = "") -> list[Path]:
+    """With >= 3 usable photos, leave out those clearly not the same person as
+    the rest (similarity to the mean of the others below photo_clean.OUTLIER_CUTOFF).
+    Files stay on disk; always keeps >= _MIN_CLEAN_IMAGES so the gallery still builds."""
+    if len(clean_images) < photo_clean.MIN_PHOTOS_TO_CHECK:
+        return clean_images
+    try:
+        pairs = recogniser.photo_embeddings(clean_images)
+        if len(pairs) < photo_clean.MIN_PHOTOS_TO_CHECK:
+            return clean_images
+        keep = photo_clean.select_keep([e for _, e in pairs], keep_min=_MIN_CLEAN_IMAGES)
+    except Exception as exc:        # clean-up is an extra; never block ingest
+        logging.getLogger(__name__).warning("photo clean-up skipped for %s: %s", character_name, exc)
+        return clean_images
+    kept = [pairs[i][0] for i in keep]
+    if len(kept) < len(pairs):
+        tqdm.write(f"  {character_name}: left out {len(pairs) - len(kept)} photo(s) that don't match the rest")
+    return kept
+
+
 # ------------------------------------------------------------------
 # Main pipeline
 # ------------------------------------------------------------------
@@ -298,6 +319,9 @@ def ingest_show(show_name: str, tmdb_id: Optional[int] = None) -> None:
                     tqdm.write(f"  [skip] {character_name}: only {len(clean_images)} clean image(s), need {_MIN_CLEAN_IMAGES}")
                     skipped += 1
                     continue
+
+                # Step 4b — drop reference photos that clearly are not this actor
+                clean_images = _drop_outlier_photos(clean_images, recogniser, character_name)
 
                 # Step 5 — build mean embedding gallery
                 gallery = recogniser.build_gallery(clean_images)
